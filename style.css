@@ -1,0 +1,71 @@
+:root {
+  --bg: #ffffff;
+  --ink: #0b0b0b;
+  --ink2: #52514e;
+  --muted: #898781;
+  --line: #e1e0d9;
+  --accent: #2a78d6;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header {
+  display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between;
+  padding: 16px; max-width: 1040px; margin: 0 auto;
+}
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 14px 0 4px; }
+.sub, .note { color: var(--ink2); margin: 4px 0; font-size: 13px; }
+main { max-width: 1040px; margin: 0 auto; padding: 0 16px 48px; }
+section { border-top: 1px solid var(--line); padding: 18px 0; }
+
+button {
+  font: inherit; color: var(--ink); background: #fff; border: 1px solid #c3c2b7; border-radius: 8px;
+  padding: 8px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+.seg { display: inline-flex; border: 1px solid #c3c2b7; border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 10px 22px; font-weight: 700; letter-spacing: .04em; }
+.seg button[aria-checked="true"] { background: var(--ink); color: #fff; }
+
+.camrow { display: flex; flex-wrap: wrap; gap: 16px; }
+.videowrap { position: relative; flex: 1 1 380px; max-width: 560px; aspect-ratio: 4 / 3; background: #f3f2ee; border-radius: 10px; overflow: hidden; }
+.videowrap video, .videowrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+#camhint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
+.side { flex: 1 1 260px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+#eyes { width: 280px; max-width: 100%; height: 140px; background: #f3f2ee; border-radius: 10px; transform: scaleX(-1); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.chip.warn { border-color: #eb6834; color: #a23d12; }
+
+.plot { display: block; width: 100%; height: 260px; }
+
+.stimctl { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 8px 0; font-size: 13px; }
+.thumbs { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.thumbs .lab { font-weight: 700; width: 16px; }
+.thumbs div { display: flex; gap: 6px; flex-wrap: wrap; }
+.thumbs canvas { width: 56px; height: 56px; border-radius: 6px; }
+
+.taskgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.taskgrid button { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 12px; }
+.taskgrid span { color: var(--ink2); font-size: 12px; }
+
+.result { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; }
+.result h3 { margin-top: 0; color: var(--ink); font-size: 14px; }
+.result ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 13px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink2); margin: 4px 0; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.dl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+#stage { position: fixed; inset: 0; z-index: 10; background: rgb(128, 128, 128); touch-action: none; }
+#stage canvas { width: 100%; height: 100%; display: block; }
+#abort { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; padding: 0; border-radius: 50%; opacity: .35; }
+
+#tip {
+  position: fixed; z-index: 5; pointer-events: none; background: #fff; border: 1px solid #c3c2b7; border-radius: 6px;
+  padding: 4px 8px; font-size: 12px; color: var(--ink); white-space: pre; box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+}

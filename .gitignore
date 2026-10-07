@@ -1,0 +1,4 @@
+# Never publish participant data or grant documents
+data/
+*.pdf
+.DS_Store
