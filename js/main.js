@@ -1,12 +1,17 @@
 import { Tracker, IRIS_MM } from './tracker.js';
 import { makeDemoSet, loadFiles } from './stimuli.js';
-import { MODES, Stage, runCalibration, runLightReflex, runPaired, runOddball, runOddOne } from './tasks.js';
+import { MODES, Stage, runCalibration, runLightReflex, runPaired, runOddOne, runOddball } from './tasks.js';
 import { linePlot, barPlot, COLORS } from './plot.js';
 
 const $ = (id) => document.getElementById(id);
 const SIM = new URLSearchParams(location.search).has('sim');
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(`orbit.${k}`)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(`orbit.${k}`, JSON.stringify(v)); } catch (e) { /* private mode */ } },
+  del(k) { try { localStorage.removeItem(`orbit.${k}`); } catch (e) { /* private mode */ } },
+};
 
-const video = $('video'), overlay = $('overlay'), eyesCv = $('eyes');
+const video = $('video');
 const tracker = new Tracker(video, { sim: SIM });
 const stage = new Stage($('stage'));
 const session = {
@@ -15,7 +20,7 @@ const session = {
 };
 const rec = { active: false, task: '', trial: -1, phase: '', cond: '', manual: '' };
 let mode = 'adult';
-let stim = makeDemoSet();
+const stim = makeDemoSet();
 
 const x = {
   stage, tracker, session, rec, stim,
@@ -26,33 +31,56 @@ const x = {
   setBg(v) { stage.bg = v; tracker.simLuma = v / 255; },
 };
 
-const status = (msg) => { $('status').textContent = msg; };
+const status = (msg) => { $('status').textContent = msg; $('teststatus').textContent = msg; };
 
-// ---- mode toggle -------------------------------------------------------------------------------
+// ---- pages -------------------------------------------------------------------------------------
+const PAGES = ['welcome', 'setup', 'tests', 'results'];
+const FOOT = {
+  welcome: '',
+  setup: 'When both eyes are green, continue to the tests.',
+  tests: 'Tests open full screen. Press Esc or the × to stop one early.',
+  results: 'Downloads contain numbers only, never video.',
+};
+let page = 'welcome';
+function go(name) {
+  page = name;
+  for (const p of PAGES) $(`p-${p}`).hidden = p !== name;
+  document.querySelectorAll('.steps button').forEach((b) => (b.dataset.go === name ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current')));
+  const i = PAGES.indexOf(name);
+  $('back').style.visibility = i > 0 ? 'visible' : 'hidden';
+  $('next').style.visibility = i < PAGES.length - 1 ? 'visible' : 'hidden';
+  $('next').textContent = name === 'welcome' ? 'Begin set-up' : name === 'setup' ? 'Continue to tests' : 'See results';
+  $('foot').textContent = FOOT[name];
+  if (name === 'results') renderDetail();
+}
+document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
+$('back').addEventListener('click', () => go(PAGES[Math.max(0, PAGES.indexOf(page) - 1)]));
+$('next').addEventListener('click', () => go(PAGES[Math.min(PAGES.length - 1, PAGES.indexOf(page) + 1)]));
+
+// ---- participant mode --------------------------------------------------------------------------
 function setMode(m) {
   mode = m;
-  document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
+  document.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === m)));
   const c = MODES[m], s = (ms) => `${ms / 1000} s`;
   $('modehint').textContent = m === 'infant'
-    ? 'Infant mode: animated attention getters with sound, larger pictures, longer looks, and each looking trial starts when the experimenter presses SPACE. Hold ← / → to key-code looking direction alongside the automatic estimate.'
-    : 'Adult mode: fixation cross, written instructions, automatic pacing.';
-  $('d-calibration').textContent = `Centre / left / right targets, ${s(c.calibDwell)} each`;
-  $('d-plr').textContent = '3 bright flashes; measures the noise floor of this device';
-  $('d-paired').textContent = `${c.paired.trials} trials: familiarise ${s(c.paired.fam)}, then new A vs. B for ${s(c.paired.test)}`;
-  $('d-oddone').textContent = `${c.oddone.trials} trials: 3 same + 1 different shape for ${s(c.oddone.dur)}, graded dissimilarity`;
+    ? 'Infant mode: animated attention getters with sound, larger pictures, and each trial starts when you press Space or tap. Hold ← / → to code looking direction by hand.'
+    : 'Adult mode: fixation cross, short written instructions, automatic pacing.';
+  $('d-calibration').textContent = `Follow a target to five positions. About ${Math.round(8 * c.calibDwell / 1000)} s.`;
+  $('d-plr').textContent = 'Three bright flashes. Shows how well this device measures pupil size. 25 s.';
+  $('d-paired').textContent = `${c.paired.trials} trials: one picture, then a similar and a different one side by side (${s(c.paired.test)}).`;
+  $('d-oddone').textContent = `${c.oddone.trials} trials: four shapes, one differs by a graded amount (${s(c.oddone.dur)} each).`;
+  $('d-oddball').textContent = `${c.oddball.trials} pictures with rare changes. About ${Math.round(c.oddball.trials * (c.oddball.stim + c.oddball.isi) / 1000)} s.`;
   $('instructed').disabled = m === 'infant';
-  $('d-oddball').textContent = `${c.oddball.trials} pictures, 20% deviants (same vs. other category), ~${Math.round(c.oddball.trials * (c.oddball.stim + c.oddball.isi) / 1000)} s`;
 }
-document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
-// ---- stimuli -----------------------------------------------------------------------------------
+// ---- pictures ----------------------------------------------------------------------------------
 function showThumbs() {
   for (const k of ['A', 'B']) {
-    const box = $(`thumbs${k}`);
-    box.replaceChildren(...stim[k].map((cv) => {
+    $(`thumbs${k}`).replaceChildren(...stim[k].map((cv) => {
       const t = document.createElement('canvas');
-      t.width = t.height = 112;
-      t.getContext('2d').drawImage(cv, 0, 0, 112, 112);
+      t.width = t.height = 96;
+      t.getContext('2d').drawImage(cv, 0, 0, 96, 96);
       return t;
     }));
   }
@@ -61,7 +89,7 @@ async function onFiles(k, input) {
   if (!input.files.length) return;
   try {
     const set = await loadFiles(input.files, $('equalize').checked);
-    if (set.length < 2) { status(`Category ${k} needs at least 2 images.`); return; }
+    if (set.length < 2) { status(`Set ${k} needs at least 2 images.`); return; }
     stim[k] = set;
     stim.custom = true;
     showThumbs();
@@ -70,82 +98,215 @@ async function onFiles(k, input) {
 $('filesA').addEventListener('change', (e) => onFiles('A', e.target));
 $('filesB').addEventListener('change', (e) => onFiles('B', e.target));
 $('demo').addEventListener('click', () => { Object.assign(stim, makeDemoSet(), { custom: false }); showThumbs(); });
+$('stimbtn').addEventListener('click', () => $('dlg-stim').showModal());
+document.querySelectorAll('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 
-// ---- live view ---------------------------------------------------------------------------------
-const live = [];
-let lastUi = 0;
+// ---- units: screen scale and viewing distance --------------------------------------------------
+const CARD_MM = 85.6, DEFAULT_PX_PER_MM = 96 / 25.4;
+let pxPerMm = store.get('pxPerMm') || DEFAULT_PX_PER_MM;
+let scaleCalibrated = !!store.get('pxPerMm');
+const focalKey = () => `focalK:${tracker.cameraLabel}:${video.videoWidth}x${video.videoHeight}`;
+const deg = (frac, extentPx, distMm) => Math.atan((frac - 0.5) * extentPx / pxPerMm / distMm) * 180 / Math.PI;
 
-function drawOverlay(s) {
-  const W = video.videoWidth, H = video.videoHeight;
+function unitsInfo() {
+  const w = window.innerWidth / pxPerMm / 10;
+  $('scaleinfo').textContent = `${scaleCalibrated ? 'Calibrated' : 'Not calibrated (assuming a standard 96 dpi screen)'}: this window is about ${w.toFixed(1)} cm wide.`;
+  $('distinfo').textContent = tracker.focalCalibrated ? 'Calibrated for this camera.' : 'Using a typical webcam field of view (about ±15% uncertain).';
+}
+function drawCard() {
+  const w = +$('cardslider').value;
+  $('cardbox').style.width = `${w}px`;
+  $('cardbox').style.height = `${w * 53.98 / CARD_MM}px`;
+}
+$('cardslider').addEventListener('input', () => {
+  drawCard();
+  pxPerMm = +$('cardslider').value / CARD_MM;
+  scaleCalibrated = true;
+  store.set('pxPerMm', pxPerMm);
+  unitsInfo();
+});
+$('unitsbtn').addEventListener('click', () => {
+  $('cardslider').value = Math.round(pxPerMm * CARD_MM);
+  drawCard(); unitsInfo();
+  $('dlg-units').showModal();
+});
+$('distset').addEventListener('click', () => {
+  const cm = +$('distcm').value;
+  if (!(cm >= 15 && cm <= 150)) { $('distinfo').textContent = 'Enter a distance between 15 and 150 cm.'; return; }
+  if (!tracker.running || !tracker.calibrateDistance(cm * 10)) { $('distinfo').textContent = 'Start the camera and face it first.'; return; }
+  store.set(focalKey(), tracker.focalK);
+  unitsInfo();
+});
+$('unitsreset').addEventListener('click', () => {
+  store.del('pxPerMm'); store.del(focalKey());
+  pxPerMm = DEFAULT_PX_PER_MM; scaleCalibrated = false; tracker.focalCalibrated = false;
+  $('cardslider').value = Math.round(pxPerMm * CARD_MM);
+  drawCard(); unitsInfo();
+});
+
+// ---- camera ------------------------------------------------------------------------------------
+async function fillCameras() {
+  const cams = await tracker.listCameras(), sel = $('camsel'), cur = sel.value;
+  sel.replaceChildren(new Option('Default (front)', ''), ...cams.map((c, i) => new Option(c.label || `Camera ${i + 1}`, c.deviceId)));
+  sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
+}
+async function startCamera() {
+  $('camtoggle').disabled = true;
+  status(SIM ? 'Starting simulated tracker…' : 'Starting the camera and loading the face model…');
+  try {
+    const res = await tracker.start({ deviceId: $('camsel').value, height: +$('ressel').value });
+    if (!res) return;
+    session.meta.video = res;
+    const k = store.get(focalKey());
+    if (k) { tracker.focalK = k; tracker.focalCalibrated = true; }
+    chip('chip-res', SIM ? 'simulated' : `${res.width}×${res.height}`, !SIM && res.height < 720);
+    status(SIM ? 'Simulation: pupil follows screen brightness, gaze follows the pointer.' : '');
+    $('camtoggle').textContent = 'Stop camera';
+    $('camtoggle').classList.remove('primary');
+    await fillCameras();
+  } catch (e) {
+    console.error(e);
+    status(e.name === 'NotAllowedError' ? 'Camera access was refused. Allow it in the browser settings and try again.' : `Could not start the camera: ${e.message}`);
+  } finally { $('camtoggle').disabled = false; }
+}
+function stopCamera() {
+  tracker.stop();
+  $('camtoggle').textContent = 'Start camera';
+  $('camtoggle').classList.add('primary');
+  status('');
+  setEyes(false, false, false);
+  $('guide').textContent = 'Camera is off';
+  $('guidesub').textContent = 'Sit facing the screen with even light on your face, then start the camera.';
+}
+$('camtoggle').addEventListener('click', () => (tracker.running ? stopCamera() : startCamera()));
+for (const id of ['camsel', 'ressel']) {
+  $(id).addEventListener('change', async () => { if (tracker.running && !rec.active) { tracker.stop(); await startCamera(); } });
+}
+
+// ---- eye signal indicators and live views ------------------------------------------------------
+let view = 'off';
+document.querySelectorAll('#viewseg button').forEach((b) => b.addEventListener('click', () => {
+  view = b.dataset.view;
+  document.querySelectorAll('#viewseg button').forEach((q) => q.setAttribute('aria-checked', String(q === b)));
+  document.querySelectorAll('.view').forEach((v) => { v.hidden = v.dataset.view !== view; });
+}));
+
+function setEyes(face, okL, okR) {
+  // Shown mirrored, like the camera view: the participant's left eye is on the left.
+  for (const [sel, ok] of [['[data-eye="L"]', okL], ['[data-eye="R"]', okR]]) {
+    document.querySelectorAll(`#eyebig ${sel}, #eyemini ${sel}`).forEach((el) => {
+      el.classList.toggle('on', ok);
+      el.classList.toggle('face', face && !ok);
+    });
+  }
+}
+function chip(id, text, warn = false) { const el = $(id); el.textContent = text; el.classList.toggle('warn', warn); }
+
+function guidance(s, okL, okR) {
+  if (!s.face) return ['No face found', 'Sit centred in front of the camera.'];
+  if (2 * s.irisPx < 22) return ['Please move closer', 'The eyes are too small in the image to measure.'];
+  if (s.distMm < 250) return ['Please move back a little', 'You are very close to the camera.'];
+  if (!okL && !okR) return ['Finding your eyes…', 'More even light on the face helps. Avoid a bright window behind or beside you.'];
+  if (!okL || !okR) return ['One eye acquired', 'Reduce glare or shadow on the other eye, or turn slightly towards the light.'];
+  return ['Both eyes acquired', 'Hold this position. You can continue to the tests.'];
+}
+
+function drawCamera(s) {
+  const W = video.videoWidth, H = video.videoHeight, cv = $('camview');
   if (!W) return;
-  if (overlay.width !== W) { overlay.width = W; overlay.height = H; }
-  const ctx = overlay.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-  const ectx = eyesCv.getContext('2d'), half = eyesCv.width / 2;
-  ectx.fillStyle = '#f3f2ee';
-  ectx.fillRect(0, 0, eyesCv.width, eyesCv.height);
-  ctx.lineWidth = Math.max(1, W / 640);
-  [...s.eyes].sort((a, b) => a.x - b.x).forEach((e, k) => {
+  const sc = Math.min(1, 960 / W);
+  if (cv.width !== Math.round(W * sc)) { cv.width = Math.round(W * sc); cv.height = Math.round(H * sc); }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(-sc, 0, 0, sc, cv.width, 0);
+  ctx.drawImage(video, 0, 0);
+  ctx.lineWidth = 2 / sc;
+  for (const e of s.eyes) {
     ctx.strokeStyle = COLORS[0]; ctx.beginPath(); ctx.arc(e.x, e.y, e.R, 0, 2 * Math.PI); ctx.stroke();
     if (e.ok) { ctx.strokeStyle = COLORS[1]; ctx.beginPath(); ctx.arc(e.px, e.py, e.pr, 0, 2 * Math.PI); ctx.stroke(); }
+  }
+}
+function drawEyes(s) {
+  const cv = $('eyes'), ctx = cv.getContext('2d'), half = cv.width / 2;
+  ctx.fillStyle = '#f6f7f9';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingEnabled = false;
+  [...s.eyes].sort((a, b) => a.x - b.x).forEach((e, k) => {
     const span = 3.6 * e.R, sc = half / span;
-    ectx.drawImage(video, e.x - span / 2, e.y - span / 2, span, span, k * half, 0, half, eyesCv.height);
-    ectx.lineWidth = 1.5;
-    ectx.strokeStyle = COLORS[0]; ectx.beginPath(); ectx.arc(k * half + half / 2, eyesCv.height / 2, e.R * sc, 0, 2 * Math.PI); ectx.stroke();
+    ctx.drawImage(video, e.x - span / 2, e.y - span / 2, span, span, k * half, 0, half, cv.height);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = COLORS[0]; ctx.beginPath(); ctx.arc(k * half + half / 2, cv.height / 2, e.R * sc, 0, 2 * Math.PI); ctx.stroke();
     if (e.ok) {
-      ectx.strokeStyle = COLORS[1]; ectx.beginPath();
-      ectx.arc(k * half + half / 2 + (e.px - e.x) * sc, eyesCv.height / 2 + (e.py - e.y) * sc, e.pr * sc, 0, 2 * Math.PI); ectx.stroke();
+      ctx.strokeStyle = COLORS[1]; ctx.beginPath();
+      ctx.arc(k * half + half / 2 + (e.px - e.x) * sc, cv.height / 2 + (e.py - e.y) * sc, e.pr * sc, 0, 2 * Math.PI); ctx.stroke();
     }
   });
 }
 
-function chip(id, text, warn = false) { const el = $(id); el.textContent = text; el.classList.toggle('warn', warn); }
+const hist = [], okHist = { L: [], R: [] };
+let lastUi = 0, lastEyes = [];
+
+// Gaze in degrees of visual angle from the screen centre, for the pooled estimate and each eye.
+function addDegrees(s) {
+  const d = s.distMm;
+  s.gxDeg = deg(s.gx, window.innerWidth, d);
+  s.gyDeg = deg(s.gy, window.innerHeight, d);
+  for (const e of [s.eyeL, s.eyeR]) {
+    if (!e) continue;
+    e.gxDeg = deg(e.gx, window.innerWidth, d);
+    e.gyDeg = deg(e.gy, window.innerHeight, d);
+  }
+}
 
 tracker.onSample((s) => {
+  addDegrees(s);
+  if (s.eyes.length === 2) lastEyes = s.eyes;
   if (rec.active) {
     session.samples.push({
       t: s.t, mode, task: rec.task, trial: rec.trial, phase: rec.phase, cond: rec.cond, face: s.face, blink: s.blink,
-      pL: s.pL, pR: s.pR, p: s.p, irisPx: s.irisPx, contrast: s.contrast, h: s.h, yaw: s.yaw, gx: s.gx, side: s.side, manual: rec.manual,
+      pL: s.pL, pR: s.pR, p: s.p, irisPx: s.irisPx, contrast: s.contrast, h: s.h, yaw: s.yaw, v: s.v, pitch: s.pitch,
+      gx: s.gx, gy: s.gy, gxDeg: s.gxDeg, gyDeg: s.gyDeg, distMm: s.distMm, side: s.side, manual: rec.manual,
     });
     return;
   }
-  live.push({ t: s.t, mm: s.p * IRIS_MM });
-  while (live.length && s.t - live[0].t > 10000) live.shift();
-  if (!SIM) drawOverlay(s);
+  for (const [k, v] of [['L', s.pL], ['R', s.pR]]) { okHist[k].push(Number.isFinite(v)); if (okHist[k].length > 12) okHist[k].shift(); }
+  const frac = (a) => a.filter(Boolean).length / Math.max(1, a.length);
+  const okL = frac(okHist.L) >= 0.6, okR = frac(okHist.R) >= 0.6;
+  const L = s.eyeL || {}, R = s.eyeR || {};
+  hist.push({ t: s.t, xL: L.gxDeg, xR: R.gxDeg, yL: L.gyDeg, yR: R.gyDeg, hL: L.h, hR: R.h, vL: L.v, vR: R.v, pL: s.pL * IRIS_MM, pR: s.pR * IRIS_MM });
+  while (hist.length && s.t - hist[0].t > 10000) hist.shift();
+
+  if (page === 'setup' && !SIM) {
+    if (view === 'camera') drawCamera(s);
+    else if (view === 'eyes') drawEyes(s);
+  }
   if (s.t - lastUi < 150) return;
   lastUi = s.t;
+  setEyes(s.face, okL, okR);
+  if (!tracker.running) return;
+  const [g1, g2] = guidance(s, okL, okR);
+  $('guide').textContent = g1;
+  $('guidesub').textContent = g2;
   chip('chip-fps', `${tracker.fps.toFixed(0)} fps`, tracker.fps < 20);
-  chip('chip-iris', s.face ? `iris ${(2 * s.irisPx).toFixed(0)} px` : 'no face', !s.face || s.irisPx < 12);
-  chip('chip-pupil', Number.isFinite(s.p) ? `pupil ${(s.p * IRIS_MM).toFixed(2)} mm` : 'pupil –', s.face && !s.blink && !Number.isFinite(s.p));
-  chip('chip-gaze', Number.isFinite(s.gx) ? `gaze ${{ L: 'left', R: 'right', C: 'centre' }[s.side]}` : 'gaze: not calibrated');
-  linePlot($('live'), {
-    hover: false, xlim: [-10, 0], xlabel: 'Time (s)', ylabel: 'mm',
-    series: [{ label: 'Pupil', color: COLORS[0], x: live.map((q) => (q.t - s.t) / 1000), y: live.map((q) => q.mm) }],
-  });
-});
-
-$('start').addEventListener('click', async () => {
-  if (tracker.running) return;
-  $('start').disabled = true;
-  status(SIM ? 'Starting simulated tracker…' : 'Starting camera and loading the face model (first load downloads ~4 MB)…');
-  try {
-    const res = await tracker.start();
-    session.meta.video = res;
-    $('camhint').hidden = true;
-    chip('chip-res', SIM ? 'simulated' : `${res.width}×${res.height}`, !SIM && res.height < 720);
-    status(SIM ? 'Simulation: pupil follows screen brightness, gaze follows the pointer.'
-      : 'Tracking. Sit so the iris spans at least ~25 px, with even light on the face and no glare on glasses.');
-    $('start').textContent = 'Camera running';
-  } catch (e) {
-    console.error(e);
-    status(`Could not start: ${e.message}`);
-    $('start').disabled = false;
+  chip('chip-dist', s.face ? `distance ≈ ${(s.distMm / 10).toFixed(0)} cm${tracker.focalCalibrated ? '' : ' (uncalibrated)'}` : 'distance –');
+  chip('chip-iris', s.face ? `iris ${(2 * s.irisPx).toFixed(0)} px` : 'iris –', s.face && 2 * s.irisPx < 30);
+  chip('chip-pupil', Number.isFinite(s.p) ? `pupil ≈ ${(s.p * IRIS_MM).toFixed(1)} mm` : 'pupil –');
+  if (page !== 'setup') return;
+  const tt = hist.map((q) => (q.t - s.t) / 1000);
+  const two = (a, b) => [
+    { label: 'Left eye', color: COLORS[0], x: tt, y: hist.map((q) => q[a]) },
+    { label: 'Right eye', color: COLORS[1], x: tt, y: hist.map((q) => q[b]) },
+  ];
+  if (view === 'position') {
+    const cal = !!tracker.calib;
+    $('posunit').textContent = cal ? 'Degrees from the screen centre' : 'Uncalibrated: iris position within the eye opening. Run the gaze calibration for degrees.';
+    linePlot($('posx'), { hover: false, xlim: [-10, 0], ylabel: cal ? 'Horizontal (deg)' : 'Horizontal', series: cal ? two('xL', 'xR') : two('hL', 'hR') });
+    linePlot($('posy'), { hover: false, xlim: [-10, 0], xlabel: 'Time (s)', ylabel: cal ? 'Vertical (deg)' : 'Vertical', series: cal ? two('yL', 'yR') : two('vL', 'vR') });
+  } else if (view === 'pupil') {
+    linePlot($('live'), { hover: false, xlim: [-10, 0], xlabel: 'Time (s)', ylabel: 'Pupil diameter (est. mm)', series: two('pL', 'pR') });
   }
 });
 
-// Raw (unannotated, native-resolution) crops of both eyes, saved locally for tuning the pupil fit.
-let lastEyes = [];
-tracker.onSample((s) => { if (s.eyes.length === 2) lastEyes = s.eyes; });
+// Unprocessed, native-resolution crops of both eyes, saved locally for tuning the pupil fit.
 $('snap').addEventListener('click', () => {
   if (!lastEyes.length || !video.videoWidth) { status('No eyes tracked yet.'); return; }
   const span = Math.round(4 * Math.max(lastEyes[0].R, lastEyes[1].R)), cv = document.createElement('canvas');
@@ -161,57 +322,23 @@ $('snap').addEventListener('click', () => {
   }, 'image/png');
 });
 
-// ---- tasks -------------------------------------------------------------------------------------
+// ---- tests -------------------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') rec.manual = 'L'; else if (e.key === 'ArrowRight') rec.manual = 'R'; });
 window.addEventListener('keyup', (e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') rec.manual = ''; });
 
-// Tracking-quality covariates for one task run (the analogue of EEG signal-quality covariates).
+// Tracking-quality and viewing-geometry covariates for one test run.
 function quality(t0) {
   const ss = session.samples.filter((q) => q.t >= t0), n = ss.length;
   if (n < 2) return null;
   const avg = (k) => { const v = ss.map((q) => q[k]).filter(Number.isFinite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const dist = avg('distMm'), wMm = window.innerWidth / pxPerMm;
   return {
     n_samples: n, fps: 1000 * (n - 1) / (ss[n - 1].t - ss[0].t),
     face_frac: ss.filter((q) => q.face).length / n, pupil_valid_frac: ss.filter((q) => Number.isFinite(q.p)).length / n,
     blink_frac: ss.filter((q) => q.blink).length / n, iris_radius_px: avg('irisPx'), pupil_iris_contrast: avg('contrast'),
+    distance_mm: dist, distance_calibrated: tracker.focalCalibrated, screen_width_mm: wMm, screen_scale_calibrated: scaleCalibrated,
+    screen_width_deg: dist ? 2 * Math.atan(wMm / 2 / dist) * 180 / Math.PI : null,
   };
-}
-
-function showResult(r) {
-  const list = $('resultlist');
-  if (!session.results.length) list.replaceChildren();
-  session.results.push({ kind: r.kind, mode, time: new Date().toISOString(), lines: r.lines, data: r.data, trials: r.trials, quality: r.quality });
-  const box = document.createElement('div');
-  box.className = 'result';
-  const h = document.createElement('h3');
-  h.textContent = `${r.title} · ${mode.toUpperCase()} · ${new Date().toLocaleTimeString()}`;
-  box.append(h);
-  let cv = null;
-  if (r.plot) {
-    if (r.plot.type === 'line' && r.plot.series.length > 1) {
-      const lg = document.createElement('div');
-      lg.className = 'legend';
-      for (const q of r.plot.series) {
-        const sp = document.createElement('span'), sw = document.createElement('i');
-        sw.style.background = q.color;
-        sp.append(sw, q.label);
-        lg.append(sp);
-      }
-      box.append(lg);
-    }
-    cv = document.createElement('canvas');
-    cv.className = 'plot';
-    box.append(cv);
-  }
-  const ul = document.createElement('ul');
-  for (const ln of r.lines) { const li = document.createElement('li'); li.textContent = ln; ul.append(li); }
-  box.append(ul);
-  list.prepend(box);
-  if (cv) {
-    const render = () => (r.plot.type === 'bar' ? barPlot(cv, r.plot) : linePlot(cv, r.plot));
-    render();
-    window.addEventListener('resize', render);
-  }
 }
 
 const TASKS = {
@@ -223,7 +350,7 @@ const TASKS = {
 };
 
 async function runTask(name) {
-  if (!tracker.running) { status('Start the camera first.'); return; }
+  if (!tracker.running) { status('The camera is off. Start it on the Set up page first.'); return; }
   if (rec.active) return;
   const out = [];
   await stage.open();
@@ -233,19 +360,67 @@ async function runTask(name) {
     const t0 = performance.now(), res = await TASKS[name].fn(x);
     res.quality = quality(t0);
     out.push(res);
-    status('Done.');
+    status('');
   } catch (e) {
-    if (e.message === 'aborted') status('Task stopped.');
-    else { console.error(e); status(`Task failed: ${e.message}`); }
+    if (e.message === 'aborted') status('Test stopped.');
+    else { console.error(e); status(`Test failed: ${e.message}`); }
   } finally {
     Object.assign(rec, { active: false, task: '', trial: -1, phase: '', cond: '' });
     x.setBg(128);
     tracker.simLuma = 0.5;
     stage.close();
   }
-  out.forEach(showResult);
+  for (const r of out) session.results.push({ ...r, mode, time: new Date() });
+  if (out.length) { selected = session.results.length - 1; renderList(); go('results'); }
 }
 document.querySelectorAll('[data-task]').forEach((b) => b.addEventListener('click', () => runTask(b.dataset.task)));
+
+// ---- results -----------------------------------------------------------------------------------
+let selected = -1;
+function renderList() {
+  const list = $('runlist');
+  if (!session.results.length) return;
+  list.replaceChildren(...session.results.map((r, i) => {
+    const b = document.createElement('button'), sm = document.createElement('small');
+    b.type = 'button';
+    b.append(r.title);
+    sm.textContent = `${r.mode === 'infant' ? 'Infant' : 'Adult'} · ${r.time.toLocaleTimeString()}`;
+    b.append(sm);
+    if (i === selected) b.setAttribute('aria-current', 'true');
+    b.addEventListener('click', () => { selected = i; renderList(); renderDetail(); });
+    return b;
+  }).reverse());
+}
+function renderDetail() {
+  const r = session.results[selected], box = $('rundetail');
+  if (!r) return;
+  const h = document.createElement('h3');
+  h.textContent = `${r.title} · ${r.mode === 'infant' ? 'Infant' : 'Adult'} · ${r.time.toLocaleTimeString()}`;
+  const parts = [h];
+  let cv = null;
+  if (r.plot) {
+    if (r.plot.type === 'line' && r.plot.series.length > 1) {
+      const lg = document.createElement('div');
+      lg.className = 'legend';
+      for (const q of r.plot.series) {
+        const sp = document.createElement('span'), sw = document.createElement('i');
+        sw.style.background = q.color;
+        sp.append(sw, q.label);
+        lg.append(sp);
+      }
+      parts.push(lg);
+    }
+    cv = document.createElement('canvas');
+    cv.className = 'plot';
+    parts.push(cv);
+  }
+  const ul = document.createElement('ul');
+  for (const ln of r.lines) { const li = document.createElement('li'); li.textContent = ln; ul.append(li); }
+  parts.push(ul);
+  box.replaceChildren(...parts);
+  if (cv) (r.plot.type === 'bar' ? barPlot : linePlot)(cv, r.plot);
+}
+window.addEventListener('resize', () => { if (page === 'results') renderDetail(); });
 
 // ---- export ------------------------------------------------------------------------------------
 function download(name, text, type) {
@@ -259,10 +434,11 @@ const num = (v, d) => (Number.isFinite(v) ? v.toFixed(d) : '');
 const stamp = () => session.meta.started.replace(/[:.]/g, '-');
 
 $('dl-samples').addEventListener('click', () => {
-  const rows = ['t_ms,mode,task,trial,phase,cond,face,blink,pupil_ratio_L,pupil_ratio_R,pupil_ratio,pupil_mm_est,iris_radius_px,contrast,gaze_h,head_yaw,gaze_x,side,manual'];
+  const rows = ['t_ms,mode,task,trial,phase,cond,face,blink,pupil_ratio_L,pupil_ratio_R,pupil_ratio,pupil_mm_est,iris_radius_px,contrast,gaze_h,head_yaw,gaze_v,head_pitch,gaze_x,gaze_y,gaze_x_deg,gaze_y_deg,distance_mm,side,manual'];
   for (const s of session.samples) {
     rows.push([num(s.t, 1), s.mode, s.task, s.trial, s.phase, s.cond, +s.face, +s.blink, num(s.pL, 4), num(s.pR, 4), num(s.p, 4),
-      num(s.p * IRIS_MM, 3), num(s.irisPx, 2), num(s.contrast, 1), num(s.h, 4), num(s.yaw, 4), num(s.gx, 3), s.side, s.manual].join(','));
+      num(s.p * IRIS_MM, 3), num(s.irisPx, 2), num(s.contrast, 1), num(s.h, 4), num(s.yaw, 4), num(s.v, 4), num(s.pitch, 4),
+      num(s.gx, 3), num(s.gy, 3), num(s.gxDeg, 2), num(s.gyDeg, 2), num(s.distMm, 0), s.side, s.manual].join(','));
   }
   download(`orbit_samples_${stamp()}.csv`, rows.join('\n'), 'text/csv');
 });
@@ -272,10 +448,14 @@ $('dl-events').addEventListener('click', () => {
   download(`orbit_events_${stamp()}.csv`, rows.join('\n'), 'text/csv');
 });
 $('dl-summary').addEventListener('click', () => {
-  download(`orbit_summary_${stamp()}.json`, JSON.stringify({ meta: session.meta, results: session.results }, null, 2), 'application/json');
+  const results = session.results.map((r) => ({ kind: r.kind, mode: r.mode, time: r.time.toISOString(), lines: r.lines, data: r.data, trials: r.trials, quality: r.quality }));
+  const meta = { ...session.meta, screen_px_per_mm: pxPerMm, screen_scale_calibrated: scaleCalibrated, distance_calibrated: tracker.focalCalibrated };
+  download(`orbit_summary_${stamp()}.json`, JSON.stringify({ meta, results }, null, 2), 'application/json');
 });
 
 setMode('adult');
 showThumbs();
+go('welcome');
 if (SIM) status('Simulation mode (?sim): no camera is used.');
-window.__pupillook = { tracker, session, stage, rec };
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', fillCameras);
+window.__orbit = { tracker, session, stage, rec };

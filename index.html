@@ -2,91 +2,206 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ORBIT">
 <title>ORBIT — Object Recognition: Browser-based Implicit Test</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <div>
-    <h1>ORBIT</h1>
-    <p class="sub"><b>O</b>bject <b>R</b>ecognition: <b>B</b>rowser-based <b>I</b>mplicit <b>T</b>est. Webcam gaze and pupil measures, no response required. All video is processed on this device;
-      only numeric time series are kept.</p>
-  </div>
-  <div class="seg" role="radiogroup" aria-label="Participant mode">
-    <button type="button" role="radio" data-mode="adult" aria-checked="true">ADULT</button>
-    <button type="button" role="radio" data-mode="infant" aria-checked="false">INFANT</button>
-  </div>
-</header>
-
-<main>
-  <section id="cam">
-    <h2>1 · Camera</h2>
-    <div class="camrow">
-      <div class="videowrap">
-        <video id="video" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-        <div id="camhint">Camera is off</div>
+<div class="app">
+  <header class="top">
+    <button type="button" class="brand" data-go="welcome" aria-label="ORBIT home">
+      <img src="logo.svg" alt="" width="34" height="34">
+      <span><b>ORBIT</b><small>Object Recognition · Browser-based Implicit Test</small></span>
+    </button>
+    <nav class="steps" aria-label="Steps">
+      <button type="button" data-go="setup"><i>1</i>Set up</button>
+      <button type="button" data-go="tests"><i>2</i>Tests</button>
+      <button type="button" data-go="results"><i>3</i>Results</button>
+    </nav>
+    <div class="topright">
+      <div class="seg small" role="radiogroup" aria-label="Participant">
+        <button type="button" role="radio" data-mode="adult" aria-checked="true">Adult</button>
+        <button type="button" role="radio" data-mode="infant" aria-checked="false">Infant</button>
       </div>
-      <div class="side">
-        <canvas id="eyes" width="280" height="140" title="Magnified eye crops with fitted iris (blue) and pupil (orange)"></canvas>
-        <div class="chips">
-          <span class="chip" id="chip-fps">– fps</span>
-          <span class="chip" id="chip-res">– px</span>
-          <span class="chip" id="chip-iris">iris – px</span>
-          <span class="chip" id="chip-pupil">pupil – mm</span>
-          <span class="chip" id="chip-gaze">gaze –</span>
+      <div class="eyemini" id="eyemini" title="Eye signal">
+        <span data-eye="L"></span><span data-eye="R"></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Welcome -->
+    <section class="page" id="p-welcome">
+      <div class="hero">
+        <img src="logo.svg" alt="ORBIT logo" class="herologo">
+        <h1>Welcome to ORBIT</h1>
+        <p class="lead">A short, camera-based test of how the eyes respond to pictures.<br>There is nothing to press and no right or wrong answer: you simply look at the screen.</p>
+        <div class="feat">
+          <div><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><b>Just look</b><span>Your camera follows where you look and how your pupils respond.</span></div>
+          <div><svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg><b>Private by design</b><span>Video is analysed on this device and is never saved or sent anywhere.</span></div>
+          <div><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg><b>A few minutes</b><span>Each test takes between 15 seconds and two and a half minutes.</span></div>
         </div>
-        <button type="button" id="start" class="primary">Start camera</button>
-        <button type="button" id="snap" title="Saves a small PNG of the two unprocessed eye regions to this computer, for tuning the pupil fit">Save eye snapshot (PNG)</button>
-        <p id="status" class="note" role="status"></p>
+        <div class="who">
+          <span>Who is being tested?</span>
+          <div class="seg" role="radiogroup" aria-label="Participant">
+            <button type="button" role="radio" data-mode="adult" aria-checked="true">Adult</button>
+            <button type="button" role="radio" data-mode="infant" aria-checked="false">Infant</button>
+          </div>
+        </div>
+        <button type="button" class="primary big" data-go="setup">Begin set-up</button>
+        <p class="fine">Research prototype. ORBIT is not a medical device and its results are not a diagnosis.</p>
       </div>
-    </div>
-    <h3>Live pupil diameter (estimated mm, last 10 s)</h3>
-    <canvas id="live" class="plot" style="height:150px"></canvas>
-  </section>
+    </section>
 
-  <section id="stim">
-    <h2>2 · Stimuli</h2>
-    <p class="note">Two categories, A and B. The built-in set is a placeholder (smooth vs. many-lobed shapes).
-      Upload your own matched object images to replace it; files stay in this browser.</p>
-    <div class="stimctl">
-      <label>Category A <input type="file" id="filesA" accept="image/*" multiple></label>
-      <label>Category B <input type="file" id="filesB" accept="image/*" multiple></label>
-      <label class="check"><input type="checkbox" id="equalize" checked> Match mean luminance and RMS contrast (converts to grayscale)</label>
-      <button type="button" id="demo">Use built-in set</button>
-    </div>
-    <div class="thumbs"><span class="lab">A</span><div id="thumbsA"></div></div>
-    <div class="thumbs"><span class="lab">B</span><div id="thumbsB"></div></div>
-  </section>
+    <!-- Set up -->
+    <section class="page" id="p-setup" hidden>
+      <div class="cols">
+        <div class="card poscard">
+          <h2>Position check</h2>
+          <div class="eyebig" id="eyebig" aria-hidden="true">
+            <svg viewBox="0 0 120 70" data-eye="L"><path class="lid" d="M6 35C26 8 94 8 114 35 94 62 26 62 6 35z"/><circle class="iris" cx="60" cy="35" r="19"/><circle class="pup" cx="60" cy="35" r="8"/><path class="tick" d="M50 36l7 7 14-15"/></svg>
+            <svg viewBox="0 0 120 70" data-eye="R"><path class="lid" d="M6 35C26 8 94 8 114 35 94 62 26 62 6 35z"/><circle class="iris" cx="60" cy="35" r="19"/><circle class="pup" cx="60" cy="35" r="8"/><path class="tick" d="M50 36l7 7 14-15"/></svg>
+          </div>
+          <p class="guide" id="guide" role="status">Camera is off</p>
+          <p class="note" id="guidesub">Sit facing the screen with even light on your face, then start the camera.</p>
+          <div class="chips">
+            <span class="chip" id="chip-dist">distance –</span>
+            <span class="chip" id="chip-iris">iris –</span>
+            <span class="chip" id="chip-pupil">pupil –</span>
+            <span class="chip" id="chip-fps">– fps</span>
+            <span class="chip" id="chip-res">–</span>
+          </div>
+          <div class="camctl">
+            <button type="button" id="camtoggle" class="primary">Start camera</button>
+            <label>Camera <select id="camsel"><option value="">Default (front)</option></select></label>
+            <label>Detail <select id="ressel"><option value="720">720p</option><option value="1080" selected>1080p</option><option value="2160">Highest</option></select></label>
+            <button type="button" id="unitsbtn">Units and distance…</button>
+          </div>
+          <p class="note" id="status" role="status"></p>
+        </div>
 
-  <section id="tasks">
-    <h2>3 · Run</h2>
-    <p class="note" id="modehint"></p>
-    <label class="check note"><input type="checkbox" id="instructed"> Odd one out: instruct adults to "look at the odd one" (unchecked = free viewing)</label>
-    <div class="taskgrid">
-      <button type="button" data-task="calibration"><b>Gaze calibration</b><span id="d-calibration"></span></button>
-      <button type="button" data-task="plr"><b>Light-reflex check</b><span id="d-plr"></span></button>
-      <button type="button" data-task="paired"><b>Preferential looking</b><span id="d-paired"></span></button>
-      <button type="button" data-task="oddone"><b>Odd one out</b><span id="d-oddone"></span></button>
-      <button type="button" data-task="oddball"><b>Pupil oddball</b><span id="d-oddball"></span></button>
-    </div>
-  </section>
+        <div class="card viewcard">
+          <div class="viewhead">
+            <h2>Live view <small>(optional)</small></h2>
+            <div class="seg small" id="viewseg" role="radiogroup" aria-label="Live view">
+              <button type="button" role="radio" data-view="off" aria-checked="true">Off</button>
+              <button type="button" role="radio" data-view="camera" aria-checked="false">Camera</button>
+              <button type="button" role="radio" data-view="eyes" aria-checked="false">Eyes</button>
+              <button type="button" role="radio" data-view="position" aria-checked="false">Position</button>
+              <button type="button" role="radio" data-view="pupil" aria-checked="false">Pupil</button>
+            </div>
+          </div>
+          <div class="viewbody">
+            <div class="view" data-view="off"><p class="note">The coloured eyes on the left are all you need. Choose a view to see the camera image, the eye close-ups, or the eye position and pupil size over time.</p></div>
+            <div class="view" data-view="camera" hidden>
+              <canvas id="camview"></canvas>
+            </div>
+            <div class="view" data-view="eyes" hidden>
+              <canvas id="eyes" width="560" height="280"></canvas>
+              <button type="button" id="snap" title="Saves a small unprocessed image of the two eye regions to this device">Save eye snapshot</button>
+            </div>
+            <div class="view" data-view="position" hidden>
+              <div class="legend"><span><i style="background:#2a78d6"></i>Left eye</span><span><i style="background:#eb6834"></i>Right eye</span><span id="posunit" class="note"></span></div>
+              <canvas id="posx" class="plot"></canvas>
+              <canvas id="posy" class="plot"></canvas>
+            </div>
+            <div class="view" data-view="pupil" hidden>
+              <div class="legend"><span><i style="background:#2a78d6"></i>Left eye</span><span><i style="background:#eb6834"></i>Right eye</span></div>
+              <canvas id="live" class="plot"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <section id="results">
-    <h2>4 · Results</h2>
-    <div id="resultlist"><p class="note">Nothing recorded yet.</p></div>
-    <div class="dl">
-      <button type="button" id="dl-samples">Download samples (CSV)</button>
-      <button type="button" id="dl-events">Download events (CSV)</button>
-      <button type="button" id="dl-summary">Download summary (JSON)</button>
-    </div>
-  </section>
-</main>
+    <!-- Tests -->
+    <section class="page" id="p-tests" hidden>
+      <div class="testhead">
+        <div>
+          <h2>Choose a test</h2>
+          <p class="note" id="modehint"></p>
+        </div>
+        <div class="testopts">
+          <label class="check"><input type="checkbox" id="instructed"> Odd one out: tell adults to look at the odd one</label>
+          <button type="button" id="stimbtn">Pictures…</button>
+        </div>
+      </div>
+      <div class="taskgrid">
+        <button type="button" data-task="calibration"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><b>Gaze calibration</b><span id="d-calibration"></span></button>
+        <button type="button" data-task="plr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><b>Light-reflex check</b><span id="d-plr"></span></button>
+        <button type="button" data-task="paired"><svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="8" height="10" rx="2"/><rect x="13.5" y="7" width="8" height="10" rx="2"/></svg><b>Preferential looking</b><span id="d-paired"></span></button>
+        <button type="button" data-task="oddone"><svg viewBox="0 0 24 24"><circle cx="4" cy="12" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><rect x="12.8" y="9.8" width="4.4" height="4.4" rx="1"/><circle cx="20.5" cy="12" r="2.2"/></svg><b>Odd one out</b><span id="d-oddone"></span></button>
+        <button type="button" data-task="oddball"><svg viewBox="0 0 24 24"><path d="M2 15h4l2-8 3 12 3-9 2 5h6"/></svg><b>Pupil oddball</b><span id="d-oddball"></span></button>
+      </div>
+      <p class="note" id="teststatus" role="status"></p>
+    </section>
 
+    <!-- Results -->
+    <section class="page" id="p-results" hidden>
+      <div class="cols results">
+        <div class="card runlist">
+          <h2>Completed tests</h2>
+          <div id="runlist"><p class="note">Nothing recorded yet.</p></div>
+          <div class="dl">
+            <button type="button" id="dl-samples">Samples (CSV)</button>
+            <button type="button" id="dl-events">Events (CSV)</button>
+            <button type="button" id="dl-summary">Summary (JSON)</button>
+          </div>
+        </div>
+        <div class="card rundetail" id="rundetail"><p class="note">Select a completed test to see its result.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bottom">
+    <button type="button" id="back">Back</button>
+    <span class="note" id="foot"></span>
+    <button type="button" id="next" class="primary">Next</button>
+  </footer>
+</div>
+
+<dialog id="dlg-stim">
+  <h2>Pictures</h2>
+  <p class="note">Two sets, A and B. The built-in shapes are placeholders. Your own images stay in this browser.</p>
+  <div class="stimctl">
+    <label>Set A <input type="file" id="filesA" accept="image/*" multiple></label>
+    <label>Set B <input type="file" id="filesB" accept="image/*" multiple></label>
+    <label class="check"><input type="checkbox" id="equalize" checked> Match brightness and contrast (converts to grayscale)</label>
+  </div>
+  <div class="thumbs"><span class="lab">A</span><div id="thumbsA"></div></div>
+  <div class="thumbs"><span class="lab">B</span><div id="thumbsB"></div></div>
+  <div class="dlgfoot"><button type="button" id="demo">Use built-in shapes</button><button type="button" class="primary" data-close>Done</button></div>
+</dialog>
+
+<dialog id="dlg-units">
+  <h2>Units and distance</h2>
+  <p class="note">These two steps let ORBIT report gaze in degrees of visual angle and picture sizes in degrees. Both are remembered on this device.</p>
+  <h3>1 · Screen scale</h3>
+  <p class="note">Hold a bank card flat against the screen and drag the slider until the outline is exactly as wide as the card.</p>
+  <div class="cardcal"><div id="cardbox"></div></div>
+  <input type="range" id="cardslider" min="150" max="700" step="1" value="324" aria-label="Card width on screen">
+  <p class="note" id="scaleinfo"></p>
+  <h3>2 · Viewing distance</h3>
+  <p class="note">ORBIT estimates distance from the apparent size of the iris. To calibrate it for this camera, start the camera, measure the distance from your eyes to the screen with a ruler, and enter it.</p>
+  <div class="distcal">
+    <label>Measured distance <input type="number" id="distcm" min="15" max="150" step="1" placeholder="e.g. 50"> cm</label>
+    <button type="button" id="distset">Set</button>
+    <span class="note" id="distinfo"></span>
+  </div>
+  <div class="dlgfoot"><button type="button" id="unitsreset">Reset</button><button type="button" class="primary" data-close>Done</button></div>
+</dialog>
+
+<video id="video" playsinline muted aria-hidden="true"></video>
 <div id="stage" hidden>
   <canvas></canvas>
-  <button type="button" id="abort" aria-label="Stop task">×</button>
+  <button type="button" id="abort" aria-label="Stop test">×</button>
 </div>
 <div id="tip" hidden></div>
 

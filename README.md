@@ -6,6 +6,16 @@ never stored or transmitted; only numeric gaze and pupil time series are kept, a
 
 **Live:** https://maierav.github.io/orbit/ (add `?sim=1` for a no-camera simulation)
 
+## Using it
+Four pages: Welcome, Set up, Tests, Results. On Set up, two eye icons turn green when each eye is being
+measured; the camera image, eye close-ups, eye position and pupil traces are optional views. The camera can
+be stopped at any time. "Units and distance" calibrates the screen scale (bank card) and viewing distance so
+gaze is reported in degrees of visual angle.
+
+Works in current Chrome, Safari, Firefox and Edge, including Safari on iPhone and iPad ("Add to Home Screen"
+gives a full-screen app). On a Mac, an iPhone can serve as a higher-resolution eye camera through Continuity
+Camera: pick it in the Camera menu.
+
 ## Tasks
 - **Gaze calibration** — centre / left / right targets.
 - **Light-reflex check** — bright flashes; gives the pupil noise floor of the device.

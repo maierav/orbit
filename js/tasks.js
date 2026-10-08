@@ -6,13 +6,13 @@ import { COLORS } from './plot.js';
 // Durations in ms; `size` is the stimulus edge as a fraction of min(half screen width, screen height).
 export const MODES = {
   adult: {
-    attention: false, selfPaced: false, calibDwell: 2000,
+    attention: false, selfPaced: false, calibDwell: 1600,
     paired: { trials: 8, fam: 4000, test: 4000, gap: 1000, size: 0.7 },
     oddball: { trials: 60, stim: 600, isi: 1600, size: 0.6 },
     oddone: { trials: 16, dur: 2500, gap: 1000 },
   },
   infant: {
-    attention: true, selfPaced: true, calibDwell: 2500,
+    attention: true, selfPaced: true, calibDwell: 2200,
     paired: { trials: 4, fam: 10000, test: 8000, gap: 1500, size: 0.85 },
     oddball: { trials: 30, stim: 1000, isi: 2000, size: 0.85 },
     oddone: { trials: 8, dur: 5000, gap: 1500 },
@@ -155,26 +155,30 @@ export async function runCalibration(x) {
   const { stage, cfg, rec } = x;
   rec.task = 'calibration';
   await intro(x, cfg.attention
-    ? ['Gaze calibration', 'A spinning star appears at the centre, left and right.', 'Start when the infant is watching the screen.']
+    ? ['Gaze calibration', 'A spinning star appears at the centre and towards each edge.', 'Start when the infant is watching the screen.']
     : ['Gaze calibration', 'Follow the dot with your eyes. Keep your head still.']);
   const pts = [];
-  for (const [i, tx] of [0.5, 0.25, 0.75, 0.25, 0.75, 0.5].entries()) {
-    Object.assign(rec, { trial: i, phase: 'target', cond: String(tx) });
+  const targets = [[0.5, 0.5], [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75], [0.25, 0.5], [0.75, 0.5], [0.5, 0.5]];
+  for (const [i, [tx, ty]] of targets.entries()) {
+    Object.assign(rec, { trial: i, phase: 'target', cond: `${tx}_${ty}` });
     x.mark('target_on');
     if (cfg.attention) chirp();
     const t0 = performance.now();
-    stage.setDraw((ctx, w, h, t) => (cfg.attention ? drawGetter(ctx, tx * w, h / 2, Math.min(w, h) * 0.1, t) : drawDot(ctx, tx * w, h / 2, t)));
+    stage.setDraw((ctx, w, h, t) => (cfg.attention ? drawGetter(ctx, tx * w, ty * h, Math.min(w, h) * 0.1, t) : drawDot(ctx, tx * w, ty * h, t)));
     const off = x.tracker.onSample((s) => {
-      if (s.face && !s.blink && Number.isFinite(s.h) && s.t - t0 > 0.4 * cfg.calibDwell) pts.push({ x: tx, h: s.h, yaw: s.yaw });
+      if (s.face && !s.blink && Number.isFinite(s.h) && s.t - t0 > 0.4 * cfg.calibDwell) pts.push({ x: tx, y: ty, h: s.h, yaw: s.yaw, v: s.v, pitch: s.pitch });
     });
     try { await stage.wait(cfg.calibDwell); } finally { off(); }
   }
   const q = x.tracker.fitCalibration(pts);
+  const pct = (v) => (Number.isFinite(v) ? `${(100 * v).toFixed(0)}%` : 'n/a');
   return {
     kind: 'calibration', title: 'Gaze calibration',
-    lines: [
-      q.ok ? `Calibrated: ${(100 * q.acc).toFixed(0)}% of left/right samples on the correct side (${q.n} samples).`
-        : `Calibration failed (${Number.isFinite(q.acc) ? `${(100 * q.acc).toFixed(0)}% correct` : 'too few samples'}). Automatic gaze is off; use ←/→ key coding or recalibrate.`,
+    lines: q.ok ? [
+      `Left/right: ${pct(q.acc)} of samples on the correct side (${q.n} samples).`,
+      `Up/down: ${pct(q.accV)} on the correct side. Vertical gaze from a webcam is much less reliable than horizontal.`,
+    ] : [
+      `Calibration failed (${Number.isFinite(q.acc) ? `${pct(q.acc)} correct` : 'too few samples'}). Automatic gaze is off; use ←/→ key coding or recalibrate.`,
     ],
     data: q,
   };

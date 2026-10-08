@@ -31,9 +31,20 @@ export function equalize(cv, mean = BG, sd = TARGET_SD) {
   const im = ctx.getImageData(0, 0, cv.width, cv.height), d = im.data, n = d.length / 4;
   const g = new Float32Array(n);
   for (let i = 0; i < n; i++) g[i] = 0.2126 * d[4 * i] + 0.7152 * d[4 * i + 1] + 0.0722 * d[4 * i + 2];
-  const corner = g[0], obj = new Uint8Array(n);
-  let nObj = 0;
-  for (let i = 0; i < n; i++) if (Math.abs(g[i] - corner) > 1.5) { obj[i] = 1; nObj++; }
+  // Background = pixels matching the corner colour and connected to the image border (flood fill),
+  // so object pixels that merely happen to share the background gray are left alone.
+  const corner = g[0], obj = new Uint8Array(n).fill(1), W = cv.width, H = cv.height, queue = [];
+  let nObj = n;
+  const visit = (i) => { if (obj[i] && Math.abs(g[i] - corner) <= 1.5) { obj[i] = 0; nObj--; queue.push(i); } };
+  for (let xx = 0; xx < W; xx++) { visit(xx); visit((H - 1) * W + xx); }
+  for (let yy = 0; yy < H; yy++) { visit(yy * W); visit(yy * W + W - 1); }
+  while (queue.length) {
+    const i = queue.pop(), xx = i % W;
+    if (xx > 0) visit(i - 1);
+    if (xx < W - 1) visit(i + 1);
+    if (i >= W) visit(i - W);
+    if (i < n - W) visit(i + W);
+  }
   if (n - nObj < 0.05 * n || nObj < 0.01 * n) { obj.fill(1); nObj = n; }
   // Two passes, because clipping to 0..255 shifts the statistics slightly.
   for (let pass = 0; pass < 2; pass++) {
