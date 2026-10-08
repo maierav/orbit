@@ -1,19 +1,19 @@
-import { BG, makeGradedPairs } from './stimuli.js';
+import { BG, makeGradedPairs, makeNoveltyPairs } from './stimuli.js';
 import { IRIS_MM } from './tracker.js';
-import { epoch, average, windowMean, lookTimes, firstLook, mean } from './analysis.js';
+import { epoch, average, windowMean, lookTimes, centreOffset, firstLook, mean } from './analysis.js';
 import { COLORS } from './plot.js';
 
 // Durations in ms; `size` is the stimulus edge as a fraction of min(half screen width, screen height).
 export const MODES = {
   adult: {
     attention: false, selfPaced: false, calibDwell: 1600,
-    paired: { trials: 8, fam: 4000, test: 4000, gap: 1000, size: 0.7 },
+    paired: { trials: 24, fam: 5000, test: 5000, gap: 2000, size: 0.9 },
     oddball: { trials: 60, stim: 600, isi: 1600, size: 0.6 },
     oddone: { trials: 16, dur: 2500, gap: 1000 },
   },
   infant: {
     attention: true, selfPaced: true, calibDwell: 2200,
-    paired: { trials: 4, fam: 10000, test: 8000, gap: 1500, size: 0.85 },
+    paired: { trials: 8, fam: 10000, test: 8000, gap: 1500, size: 1 },
     oddball: { trials: 30, stim: 1000, isi: 2000, size: 0.85 },
     oddone: { trials: 8, dur: 5000, gap: 1500 },
   },
@@ -225,27 +225,35 @@ export async function runLightReflex(x) {
   };
 }
 
+// Novelty preference (visual paired comparison): the same picture on both sides, a short blank, then that
+// picture on one side and a new one on the other. Timing defaults follow Manns, Stark & Squire (2000).
+// Which picture of a pair is the familiar one, and which side the new one appears on, are balanced
+// across trials so that a salience difference between two pictures cannot produce a preference.
 export async function runPaired(x) {
   const { stage, cfg, rec, session, stim } = x;
-  const c = cfg.paired, { A, B } = stim;
+  const c = { ...cfg.paired, ...(x.pairedOverride || {}) };
   rec.task = 'paired';
+  const pool = stim.custom
+    ? stim.A.map((a, i) => ({ a, b: stim.B[i % stim.B.length] }))
+    : makeNoveltyPairs(c.trials);
   await intro(x, cfg.attention
-    ? ['Preferential looking', 'Press SPACE when the infant looks at the star to start each trial.', 'Optional: hold ← / → while the infant looks at the left / right picture.']
-    : ['Preferential looking', 'Just look at the pictures however you like.']);
-  const sides = shuffle(Array.from({ length: c.trials }, (_, i) => (i % 2 ? 'L' : 'R')));
+    ? ['Novelty preference', 'Press SPACE when the infant looks at the star to start each trial.', 'Optional: hold ← / → while the infant looks at the left / right picture.']
+    : ['Novelty preference', 'Pictures appear on the left and right. Simply look at them however you like.', 'Look at the cross whenever it appears.']);
+  const design = shuffle(Array.from({ length: c.trials }, (_, i) => ({ novelSide: i % 2 ? 'L' : 'R', swap: (i >> 1) % 2 === 1 })));
   const pair = (l, r) => (ctx, w, h) => {
-    const s = stimSize(w, h, c.size);
-    ctx.drawImage(l, 0.25 * w - s / 2, h / 2 - s / 2, s, s);
-    ctx.drawImage(r, 0.75 * w - s / 2, h / 2 - s / 2, s, s);
+    const s = Math.min(0.32 * w, 0.7 * h) * c.size;
+    ctx.drawImage(l, 0.2 * w - s / 2, h / 2 - s / 2, s, s);
+    ctx.drawImage(r, 0.8 * w - s / 2, h / 2 - s / 2, s, s);
   };
   const centre = (ctx, w, h, t) => (cfg.attention ? drawGetter(ctx, w / 2, h / 2, Math.min(w, h) * 0.1, t) : drawFix(ctx, w / 2, h / 2));
-  const trials = [];
+  const trials = [], windows = [];
   for (let i = 0; i < c.trials; i++) {
-    const fam = A[i % A.length], novA = A[(i + 1) % A.length], novB = B[i % B.length], bSide = sides[i];
+    const p = pool[i % pool.length], { novelSide, swap } = design[i];
+    const [fam, nov] = swap ? [p.b, p.a] : [p.a, p.b];
     Object.assign(rec, { trial: i, phase: 'attention', cond: '' });
     stage.setDraw(centre);
     if (cfg.attention) chirp();
-    if (cfg.selfPaced) await stage.waitKey(); else await stage.wait(c.gap);
+    if (cfg.selfPaced) await stage.waitKey(); else await stage.wait(1000);
 
     Object.assign(rec, { phase: 'fam', cond: 'fam' });
     stage.setDraw(pair(fam, fam)); x.mark('fam_on');
@@ -255,39 +263,69 @@ export async function runPaired(x) {
     stage.setDraw(centre); x.mark('fam_off');
     await stage.wait(c.gap);
 
-    Object.assign(rec, { phase: 'test', cond: `B_${bSide}` });
-    stage.setDraw(bSide === 'L' ? pair(novB, novA) : pair(novA, novB));
+    Object.assign(rec, { phase: 'test', cond: `novel_${novelSide}${swap ? '_swap' : ''}` });
+    stage.setDraw(novelSide === 'L' ? pair(nov, fam) : pair(fam, nov));
     const t0 = performance.now(); x.mark('test_on');
     await stage.wait(c.test);
     const t1 = performance.now(); x.mark('test_off');
 
-    const lt = lookTimes(session.samples, t0, t1);
-    const pref = (b, a) => (a + b > 0 ? b / (a + b) : NaN);
+    // Per-trial midline correction from where gaze sat on the central cross just before the test.
+    const off = cfg.attention ? 0 : centreOffset(session.samples, t0 - 600, t0);
+    const lt = lookTimes(session.samples, t0, t1, off);
+    const share = (l, r) => (l + r > 0 ? (novelSide === 'L' ? l : r) / (l + r) : NaN);
+    windows.push({ t0, t1, off, novelSide });
     trials.push({
-      trial: i + 1, b_side: bSide,
-      auto_B_ms: bSide === 'L' ? lt.autoL : lt.autoR, auto_A_ms: bSide === 'L' ? lt.autoR : lt.autoL,
-      manual_B_ms: bSide === 'L' ? lt.manL : lt.manR, manual_A_ms: bSide === 'L' ? lt.manR : lt.manL,
-      tracked_frac: lt.tracked / lt.total,
-      auto_pref_B: pref(bSide === 'L' ? lt.autoL : lt.autoR, bSide === 'L' ? lt.autoR : lt.autoL),
-      manual_pref_B: pref(bSide === 'L' ? lt.manL : lt.manR, bSide === 'L' ? lt.manR : lt.manL),
+      trial: i + 1, novel_side: novelSide, roles_swapped: +swap, midline_offset: off,
+      auto_novel_ms: novelSide === 'L' ? lt.autoL : lt.autoR, auto_familiar_ms: novelSide === 'L' ? lt.autoR : lt.autoL,
+      tracked_frac: lt.tracked / lt.total, novelty_pref: share(lt.autoL, lt.autoR), manual_novelty_pref: share(lt.manL, lt.manR),
     });
   }
-  const fin = (k) => trials.map((t) => t[k]).filter(Number.isFinite);
-  const auto = fin('auto_pref_B'), man = fin('manual_pref_B');
-  const useMan = !auto.length && man.length > 0;
-  const lines = [
-    auto.length ? `Automatic gaze: mean preference for the other-category picture = ${mean(auto).toFixed(2)} (${auto.length}/${c.trials} trials; 0.50 = no preference).`
-      : 'Automatic gaze: no usable trials (gaze not calibrated or face not tracked).',
-    `Face tracked for ${(100 * mean(fin('tracked_frac'))).toFixed(0)}% of test time.`,
-  ];
-  if (man.length) lines.push(`Key coding: mean preference = ${mean(man).toFixed(2)} (${man.length} trials).`);
+
+  // A trial counts only if at least 1 s of the test was classified as left or right.
+  const usable = trials.filter((t) => t.auto_novel_ms + t.auto_familiar_ms >= Math.min(1000, 0.25 * c.test) && Number.isFinite(t.novelty_pref));
+  const prefs = usable.map((t) => t.novelty_pref), man = trials.map((t) => t.manual_novelty_pref).filter(Number.isFinite);
+  const stats = (a) => {
+    const m = mean(a), sd = Math.sqrt(mean(a.map((v) => (v - m) ** 2)) * a.length / Math.max(1, a.length - 1));
+    return { n: a.length, m, sd, d: (m - 0.5) / sd, t: (m - 0.5) / (sd / Math.sqrt(a.length)) };
+  };
+  const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : 'n/a');
+  const lines = [], data = { settings: { trials: c.trials, fam_ms: c.fam, gap_ms: c.gap, test_ms: c.test } };
+  if (prefs.length >= 2) {
+    const s = stats(prefs);
+    Object.assign(data, { novelty_pref_mean: s.m, novelty_pref_sd: s.sd, d_across_trials: s.d, t_across_trials: s.t, n_usable: s.n });
+    lines.push(`Looking at the new picture: ${(100 * s.m).toFixed(0)}% of looking time (50% = no preference), from ${s.n}/${c.trials} usable trials.`);
+    lines.push(`Across trials: SD ${(100 * s.sd).toFixed(0)} points, effect size d = ${f2(s.d)}, t(${s.n - 1}) = ${f2(s.t)}. Lab studies report 59–71%.`);
+    // How the estimate builds up, to judge how few trials and how short a test would do.
+    const steps = [4, 8, 12, 16, 24, 32, 40].filter((k) => k < prefs.length);
+    if (steps.length) lines.push(`By number of trials: ${steps.map((k) => { const q = stats(prefs.slice(0, k)); return `${k}: ${(100 * q.m).toFixed(0)}% (t ${f2(q.t)})`; }).join(' · ')}.`);
+    const secs = [];
+    for (let T = 1000; T < c.test; T += 1000) {
+      const part = windows.map((wn) => { const q = lookTimes(session.samples, wn.t0, wn.t0 + T, wn.off); const nv = wn.novelSide === 'L' ? q.autoL : q.autoR; return nv / (q.autoL + q.autoR); }).filter(Number.isFinite);
+      if (part.length >= 2) secs.push(`${T / 1000} s: ${(100 * mean(part)).toFixed(0)}%`);
+    }
+    if (secs.length) lines.push(`Using only the first part of each test: ${secs.join(' · ')}.`);
+  } else lines.push('Too few usable trials (gaze not calibrated, or the face was not tracked).');
+  lines.push(`Face tracked for ${(100 * mean(trials.map((t) => t.tracked_frac))).toFixed(0)}% of test time.`);
+  if (man.length) lines.push(`Key coding: ${(100 * mean(man)).toFixed(0)}% to the new picture (${man.length} trials).`);
+  if (stim.custom && pool.length < c.trials) lines.push(`Only ${pool.length} picture pairs were available, so pairs repeated; repeated pictures are no longer new.`);
+
+  // Time course of looking at the new picture within the test, averaged over trials.
+  const bin = 250, tt = [], pm = [], pse = [];
+  for (let b = 0; b + bin <= c.test; b += bin) {
+    const v = windows.map((wn) => { const q = lookTimes(session.samples, wn.t0 + b, wn.t0 + b + bin, wn.off); const nv = wn.novelSide === 'L' ? q.autoL : q.autoR; return nv / (q.autoL + q.autoR); }).filter(Number.isFinite);
+    tt.push((b + bin / 2) / 1000);
+    pm.push(v.length ? mean(v) : NaN);
+    pse.push(v.length > 1 ? Math.sqrt(mean(v.map((q) => (q - mean(v)) ** 2)) / (v.length - 1)) : 0);
+  }
   return {
-    kind: 'paired', title: 'Preferential looking', lines, trials,
+    kind: 'paired', title: 'Novelty preference', lines, trials, data,
     plot: {
-      type: 'bar', labels: trials.map((t) => `T${t.trial}`), values: trials.map((t) => (useMan ? t.manual_pref_B : t.auto_pref_B)),
-      ylabel: 'Share of looking at category B', xlabel: `Test trial (${useMan ? 'key coding' : 'automatic gaze'})`, ylim: [0, 1], ref: 0.5, color: COLORS[0],
+      type: 'line', xlabel: 'Time from test onset (s)', ylabel: 'Share of looks at new picture', ylim: [0, 1],
+      series: [
+        { label: 'New picture', color: COLORS[0], x: tt, y: pm, band: pse },
+        { label: 'No preference', color: '#898781', x: [0, c.test / 1000], y: [0.5, 0.5] },
+      ],
     },
-    data: { mean_auto_pref_B: mean(auto), mean_manual_pref_B: mean(man) },
   };
 }
 

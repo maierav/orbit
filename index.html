@@ -131,13 +131,14 @@
         <div class="testopts">
           <label class="check"><input type="checkbox" id="instructed"> Odd one out: tell adults to look at the odd one</label>
           <label class="check" title="The camera measures the pupil in red light. Showing the test screen without red removes the screen's own reflection from that measurement. Pictures look blue-green."><input type="checkbox" id="nored"> Glare-free display (no red)</label>
+          <button type="button" id="timingbtn">Timing…</button>
           <button type="button" id="stimbtn">Pictures…</button>
         </div>
       </div>
       <div class="taskgrid">
         <button type="button" data-task="calibration"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><b>Gaze calibration</b><span id="d-calibration"></span></button>
         <button type="button" data-task="plr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><b>Light-reflex check</b><span id="d-plr"></span></button>
-        <button type="button" data-task="paired"><svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="8" height="10" rx="2"/><rect x="13.5" y="7" width="8" height="10" rx="2"/></svg><b>Preferential looking</b><span id="d-paired"></span></button>
+        <button type="button" data-task="paired"><svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="8" height="10" rx="2"/><rect x="13.5" y="7" width="8" height="10" rx="2"/></svg><b>Novelty preference</b><span id="d-paired"></span></button>
         <button type="button" data-task="oddone"><svg viewBox="0 0 24 24"><circle cx="4" cy="12" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><rect x="12.8" y="9.8" width="4.4" height="4.4" rx="1"/><circle cx="20.5" cy="12" r="2.2"/></svg><b>Odd one out</b><span id="d-oddone"></span></button>
         <button type="button" data-task="oddball"><svg viewBox="0 0 24 24"><path d="M2 15h4l2-8 3 12 3-9 2 5h6"/></svg><b>Pupil oddball</b><span id="d-oddball"></span></button>
       </div>
@@ -179,6 +180,19 @@
   <div class="thumbs"><span class="lab">A</span><div id="thumbsA"></div></div>
   <div class="thumbs"><span class="lab">B</span><div id="thumbsB"></div></div>
   <div class="dlgfoot"><button type="button" id="demo">Use built-in shapes</button><button type="button" class="primary" data-close>Done</button></div>
+</dialog>
+
+<dialog id="dlg-timing">
+  <h2>Novelty preference timing</h2>
+  <p class="note">Each trial shows one picture on both sides (study), a blank with a central cross, then the same picture beside a new one (test). The defaults follow published adult studies; shorten them to find the briefest version that still works.</p>
+  <div class="timing">
+    <label>Study <input type="number" id="t-fam" min="0.5" max="30" step="0.5"> s</label>
+    <label>Blank <input type="number" id="t-gap" min="0.3" max="60" step="0.1"> s</label>
+    <label>Test <input type="number" id="t-test" min="0.5" max="30" step="0.5"> s</label>
+    <label>Trials <input type="number" id="t-trials" min="4" max="80" step="4"></label>
+  </div>
+  <p class="note" id="timinginfo"></p>
+  <div class="dlgfoot"><button type="button" id="timingreset">Defaults</button><button type="button" class="primary" data-close>Done</button></div>
 </dialog>
 
 <dialog id="dlg-units">

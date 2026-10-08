@@ -105,6 +105,17 @@ export function makeGradedPairs(nPerLevel = 4, seed = 11) {
   return pairs;
 }
 
+// Placeholder picture pairs for the novelty-preference test: every trial gets two shapes that have
+// not been shown before and that clearly differ (different numbers of lobes).
+export function makeNoveltyPairs(n, seed = 23) {
+  const rng = mulberry32(seed), kinds = [[2, 3], [3, 5], [4, 6], [5, 7], [6, 9], [2, 7]], pairs = [];
+  for (let i = 0; i < n; i++) {
+    const ka = kinds[i % kinds.length], kb = kinds[(i + 1 + Math.floor(rng() * (kinds.length - 1))) % kinds.length];
+    pairs.push({ a: rfShape(randComps(ka, rng)), b: rfShape(randComps(kb, rng)) });
+  }
+  return pairs;
+}
+
 export async function loadFiles(files, doEqualize) {
   const out = [];
   for (const f of files) {

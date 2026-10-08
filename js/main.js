@@ -27,6 +27,7 @@ const x = {
   get mode() { return mode; },
   get cfg() { return MODES[mode]; },
   get instructed() { return $('instructed').checked; },
+  pairedOverride: null,
   mark(type) { session.events.push({ t: performance.now(), mode, task: rec.task, trial: rec.trial, type, cond: rec.cond }); },
   setBg(v) { stage.bg = v; tracker.simLuma = v / 255; },
 };
@@ -67,7 +68,8 @@ function setMode(m) {
     : 'Adult mode: fixation cross, short written instructions, automatic pacing.';
   $('d-calibration').textContent = `Follow a target to five positions. About ${Math.round(8 * c.calibDwell / 1000)} s.`;
   $('d-plr').textContent = 'Three bright flashes. Shows how well this device measures pupil size. 25 s.';
-  $('d-paired').textContent = `${c.paired.trials} trials: one picture, then a similar and a different one side by side (${s(c.paired.test)}).`;
+  const pc = { ...c.paired, ...(x.pairedOverride || {}) };
+  $('d-paired').textContent = `${pc.trials} trials: one picture twice, then beside a new one. About ${Math.round(pc.trials * (1000 + pc.fam + pc.gap + pc.test) / 60000)} min.`;
   $('d-oddone').textContent = `${c.oddone.trials} trials: four shapes, one differs by a graded amount (${s(c.oddone.dur)} each).`;
   $('d-oddball').textContent = `${c.oddball.trials} pictures with rare changes. About ${Math.round(c.oddball.trials * (c.oddball.stim + c.oddball.isi) / 1000)} s.`;
   $('instructed').disabled = m === 'infant';
@@ -99,6 +101,22 @@ $('filesA').addEventListener('change', (e) => onFiles('A', e.target));
 $('filesB').addEventListener('change', (e) => onFiles('B', e.target));
 $('demo').addEventListener('click', () => { Object.assign(stim, makeDemoSet(), { custom: false }); showThumbs(); });
 $('stimbtn').addEventListener('click', () => $('dlg-stim').showModal());
+
+// ---- novelty-preference timing ---------------------------------------------------------------
+function timingFields() {
+  const c = { ...MODES[mode].paired, ...(x.pairedOverride || {}) };
+  $('t-fam').value = c.fam / 1000; $('t-gap').value = c.gap / 1000; $('t-test').value = c.test / 1000; $('t-trials').value = c.trials;
+  $('timinginfo').textContent = `About ${(c.trials * (1000 + c.fam + c.gap + c.test) / 60000).toFixed(1)} minutes in total.`;
+}
+$('timingbtn').addEventListener('click', () => { timingFields(); $('dlg-timing').showModal(); });
+for (const id of ['t-fam', 't-gap', 't-test', 't-trials']) {
+  $(id).addEventListener('change', () => {
+    const v = (k, lo, hi) => Math.min(hi, Math.max(lo, +$(k).value || lo));
+    x.pairedOverride = { fam: 1000 * v('t-fam', 0.5, 30), gap: 1000 * v('t-gap', 0.3, 60), test: 1000 * v('t-test', 0.5, 30), trials: 4 * Math.round(v('t-trials', 4, 80) / 4) };
+    timingFields(); setMode(mode);
+  });
+}
+$('timingreset').addEventListener('click', () => { x.pairedOverride = null; timingFields(); setMode(mode); });
 document.querySelectorAll('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 
 // ---- units: screen scale and viewing distance --------------------------------------------------
