@@ -1,6 +1,6 @@
 import { Tracker, IRIS_MM } from './tracker.js';
 import { makeDemoSet, loadFiles } from './stimuli.js';
-import { MODES, Stage, runCalibration, runLightReflex, runPaired, runOddOne, runOddball } from './tasks.js';
+import { MODES, Stage, setPxPerDeg, runCalibration, runLightReflex, runPaired, runOddOne, runOddball } from './tasks.js';
 import { linePlot, barPlot, COLORS } from './plot.js';
 
 const $ = (id) => document.getElementById(id);
@@ -261,7 +261,7 @@ function drawEyes(s) {
 }
 
 const hist = [], okHist = { L: [], R: [] };
-let lastUi = 0, lastEyes = [];
+let lastUi = 0, lastEyes = [], lastDist = NaN;
 
 // Gaze in degrees of visual angle from the screen centre, for the pooled estimate and each eye.
 function addDegrees(s) {
@@ -277,6 +277,7 @@ function addDegrees(s) {
 
 tracker.onSample((s) => {
   addDegrees(s);
+  if (Number.isFinite(s.distMm)) lastDist = s.distMm;
   if (s.eyes.length === 2) lastEyes = s.eyes;
   if (rec.active) {
     session.samples.push({
@@ -371,6 +372,9 @@ async function runTask(name) {
   if (!tracker.running) { status('The camera is off. Start it on the Set up page first.'); return; }
   if (rec.active) return;
   const out = [];
+  // Size the fixation target in degrees from the screen scale and the current viewing distance.
+  const dmm = hist.length && Number.isFinite(lastDist) ? lastDist : 500;
+  setPxPerDeg(pxPerMm * dmm * Math.tan(Math.PI / 180));
   $('stage').classList.toggle('nored', $('nored').checked);
   await stage.open();
   rec.active = true;

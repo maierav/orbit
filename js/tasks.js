@@ -103,10 +103,20 @@ function chirp() {
   } catch (e) { /* no audio */ }
 }
 
-function drawFix(ctx, x, y, bg = BG) {
-  ctx.strokeStyle = bg > 150 ? '#000' : '#fff';
-  ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.lineTo(x + 10, y); ctx.moveTo(x, y - 10); ctx.lineTo(x, y + 10); ctx.stroke();
+// Fixation target after Thaler, Schuetz, Goodale & Gegenfurtner (2013, Vision Research 76:31-42): a
+// bull's eye combined with a cross hair (outer disc 0.6 deg, inner dot 0.2 deg), which gave the most
+// stable fixation of the shapes they compared. `born` (ms) makes it shrink onto its position over
+// 400 ms, an addition of ours meant to draw the eyes without any instruction.
+let pxPerDeg = 36;
+export function setPxPerDeg(v) { if (v > 5 && v < 400) pxPerDeg = v; }
+function drawFix(ctx, x, y, bg = BG, born = null) {
+  const grow = born == null ? 1 : 1 + 2 * Math.max(0, 1 - (performance.now() - born) / 400);
+  const R = 0.3 * pxPerDeg * grow, r = Math.max(1.5, 0.1 * pxPerDeg * grow);
+  const ink = bg > 110 ? '#000' : '#fff';
+  ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(x, y, R, 0, 2 * Math.PI); ctx.fill();
+  ctx.strokeStyle = `rgb(${bg},${bg},${bg})`; ctx.lineWidth = 2 * r;
+  ctx.beginPath(); ctx.moveTo(x - R, y); ctx.lineTo(x + R, y); ctx.moveTo(x, y - R); ctx.lineTo(x, y + R); ctx.stroke();
+  ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
 }
 
 function drawDot(ctx, x, y, t) {
@@ -187,7 +197,7 @@ export async function runCalibration(x) {
 export async function runLightReflex(x) {
   const { stage, rec, session } = x;
   rec.task = 'plr';
-  await intro(x, ['Light-reflex check', 'Keep the room lights on and look at the central cross.', 'The screen will flash bright three times (25 s).']);
+  await intro(x, ['Light-reflex check', 'Keep the room lights on and look at the central target.', 'The screen will flash bright three times (25 s).']);
   const DARK = 25, BRIGHT = 255, ON = 2000, OFF = 5000, onsets = [];
   stage.setDraw((ctx, w, h) => drawFix(ctx, w / 2, h / 2, stage.bg));
   Object.assign(rec, { trial: -1, phase: 'dark', cond: '' });
@@ -238,20 +248,21 @@ export async function runPaired(x) {
     : makeNoveltyPairs(c.trials);
   await intro(x, cfg.attention
     ? ['Novelty preference', 'Press SPACE when the infant looks at the star to start each trial.', 'Optional: hold ← / → while the infant looks at the left / right picture.']
-    : ['Novelty preference', 'Pictures appear on the left and right. Simply look at them however you like.', 'Look at the cross whenever it appears.']);
+    : ['Novelty preference', 'Pictures appear on the left and right. Simply look at them however you like.', 'Look at the round target whenever it appears.']);
   const design = shuffle(Array.from({ length: c.trials }, (_, i) => ({ novelSide: i % 2 ? 'L' : 'R', swap: (i >> 1) % 2 === 1 })));
   const pair = (l, r) => (ctx, w, h) => {
     const s = Math.min(0.32 * w, 0.7 * h) * c.size;
     ctx.drawImage(l, 0.2 * w - s / 2, h / 2 - s / 2, s, s);
     ctx.drawImage(r, 0.8 * w - s / 2, h / 2 - s / 2, s, s);
   };
-  const centre = (ctx, w, h, t) => (cfg.attention ? drawGetter(ctx, w / 2, h / 2, Math.min(w, h) * 0.1, t) : drawFix(ctx, w / 2, h / 2));
+  let born = 0;
+  const centre = (ctx, w, h, t) => (cfg.attention ? drawGetter(ctx, w / 2, h / 2, Math.min(w, h) * 0.1, t) : drawFix(ctx, w / 2, h / 2, BG, born));
   const trials = [], windows = [];
   for (let i = 0; i < c.trials; i++) {
     const p = pool[i % pool.length], { novelSide, swap } = design[i];
     const [fam, nov] = swap ? [p.b, p.a] : [p.a, p.b];
     Object.assign(rec, { trial: i, phase: 'attention', cond: '' });
-    stage.setDraw(centre);
+    born = performance.now(); stage.setDraw(centre);
     if (cfg.attention) chirp();
     if (cfg.selfPaced) await stage.waitKey(); else await stage.wait(1000);
 
@@ -260,7 +271,7 @@ export async function runPaired(x) {
     await stage.wait(c.fam);
 
     Object.assign(rec, { phase: 'gap', cond: '' });
-    stage.setDraw(centre); x.mark('fam_off');
+    born = performance.now(); stage.setDraw(centre); x.mark('fam_off');
     await stage.wait(c.gap);
 
     Object.assign(rec, { phase: 'test', cond: `novel_${novelSide}${swap ? '_swap' : ''}` });
@@ -342,7 +353,7 @@ export async function runOddOne(x) {
   const slots = shuffle(Array.from({ length: c.trials }, (_, i) => i % 4));
   await intro(x, cfg.attention
     ? ['Odd one out', 'Press SPACE when the infant looks at the star to start each trial.', 'Optional: hold ← / → while the infant looks at the left / right half.']
-    : ['Odd one out', instructed ? 'Four shapes appear. Look at the one that differs from the others.' : 'Four shapes appear. Just look at them however you like.', 'Look at the cross between trials.']);
+    : ['Odd one out', instructed ? 'Four shapes appear. Look at the one that differs from the others.' : 'Four shapes appear. Just look at them however you like.', 'Look at the round target between trials.']);
   const centre = (ctx, w, h, t) => (cfg.attention ? drawGetter(ctx, w / 2, h / 2, Math.min(w, h) * 0.1, t) : drawFix(ctx, w / 2, h / 2));
   const trials = [];
   for (let i = 0; i < c.trials; i++) {
@@ -421,7 +432,7 @@ export async function runOddball(x) {
   rec.task = 'oddball';
   await intro(x, cfg.attention
     ? ['Pupil oddball', 'Pictures appear at the centre; no response is needed.', `About ${Math.round(c.trials * (c.stim + c.isi) / 1000)} s.`]
-    : ['Pupil oddball', 'Keep looking at the central cross. No response is needed.', `About ${Math.round(c.trials * (c.stim + c.isi + 100) / 1000)} s. Try to blink between pictures.`]);
+    : ['Pupil oddball', 'Keep looking at the central target. No response is needed.', `About ${Math.round(c.trials * (c.stim + c.isi + 100) / 1000)} s. Try to blink between pictures.`]);
   const seq = oddballSequence(c.trials), onsets = [];
   const simAmp = { standard: 0.002, within: 0.008, across: 0.02 };
   let kW = 0, kB = 0;

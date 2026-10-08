@@ -3,7 +3,7 @@
 
 export const STIM_PX = 384;
 export const BG = 128;
-const TARGET_SD = 38;
+const TARGET_SD = 30;
 
 function mulberry32(a) {
   return () => {
@@ -14,11 +14,11 @@ function mulberry32(a) {
   };
 }
 
-function blank() {
+function blank(bg = BG) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = STIM_PX;
   const ctx = cv.getContext('2d', { willReadFrequently: true });
-  ctx.fillStyle = `rgb(${BG},${BG},${BG})`;
+  ctx.fillStyle = `rgb(${bg},${bg},${bg})`;
   ctx.fillRect(0, 0, STIM_PX, STIM_PX);
   return [cv, ctx];
 }
@@ -61,7 +61,8 @@ export function equalize(cv, mean = BG, sd = TARGET_SD) {
 }
 
 function rfShape(comps) {
-  const [cv, ctx] = blank();
+  // Drawn on white, a value the shading never reaches, so equalize() can tell background from object.
+  const [cv, ctx] = blank(255);
   const c = STIM_PX / 2, r0 = 0.3 * STIM_PX;
   ctx.beginPath();
   for (let i = 0; i <= 360; i++) {
