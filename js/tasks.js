@@ -214,6 +214,8 @@ export async function runLightReflex(x) {
       `Baseline pupil ≈ ${base.toFixed(2)} mm (assuming an ${IRIS_MM} mm iris); ${eps.length}/3 flashes usable.`,
       `Peak constriction ${amp.toFixed(2)} mm (${(100 * amp / base).toFixed(0)}%) at ${avg.t[k].toFixed(2)} s after flash onset.`,
       `Pre-flash noise of the averaged trace: ${noise.toFixed(3)} mm RMS.`,
+      eps.length === 3 && amp > 4 * noise ? 'The reflex is clearly resolved on this device.'
+        : 'Not reliable: flashes were lost or the response is not clearly above the noise, so do not trust the numbers above.',
     ],
     plot: {
       type: 'line', xlabel: 'Time from flash onset (s)', ylabel: 'Pupil change (est. mm)', zero: true, shades: [[0, ON / 1000]],

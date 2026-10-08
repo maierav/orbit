@@ -130,6 +130,7 @@
         </div>
         <div class="testopts">
           <label class="check"><input type="checkbox" id="instructed"> Odd one out: tell adults to look at the odd one</label>
+          <label class="check" title="The camera measures the pupil in red light. Showing the test screen without red removes the screen's own reflection from that measurement. Pictures look blue-green."><input type="checkbox" id="nored"> Glare-free display (no red)</label>
           <button type="button" id="stimbtn">Pictures…</button>
         </div>
       </div>
@@ -204,6 +205,7 @@
   <button type="button" id="abort" aria-label="Stop test">×</button>
 </div>
 <div id="tip" hidden></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="f-nored" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter></svg>
 
 <script type="module" src="js/main.js"></script>
 </body>

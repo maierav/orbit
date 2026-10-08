@@ -353,12 +353,14 @@ async function runTask(name) {
   if (!tracker.running) { status('The camera is off. Start it on the Set up page first.'); return; }
   if (rec.active) return;
   const out = [];
+  $('stage').classList.toggle('nored', $('nored').checked);
   await stage.open();
   rec.active = true;
   try {
     if (TASKS[name].gaze && !tracker.calib) out.push(await runCalibration(x));
     const t0 = performance.now(), res = await TASKS[name].fn(x);
     res.quality = quality(t0);
+    if (res.quality) res.quality.display_no_red = $('nored').checked;
     out.push(res);
     status('');
   } catch (e) {
