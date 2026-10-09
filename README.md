@@ -2,7 +2,7 @@
 
 A feasibility prototype for measuring object-recognition ability without an overt response, using an
 ordinary webcam or phone camera. It runs entirely in the browser: video is processed on the device and
-never stored or transmitted; only numeric gaze and pupil time series are kept, and only if you download them.
+never stored or transmitted; only numeric gaze time series are kept, and only if you download them.
 
 **Live:** https://maierav.github.io/orbit/ (add `?sim=1` for a no-camera simulation)
 
