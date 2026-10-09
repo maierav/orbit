@@ -295,6 +295,7 @@ def main():
     ap.add_argument("--first", type=int, default=1, help="number of the first base object")
     ap.add_argument("--levels", type=float, nargs="*", default=[0.05, 0.1, 0.2, 0.4], help="variant levels (0-1)")
     ap.add_argument("--variant-bases", type=int, default=0, help="how many bases per family also get variants")
+    ap.add_argument("--level-cycle", action="store_true", help="give each variant base one level, cycling through --levels")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--views", type=int, nargs="+", default=[-30, 0, 30])
     ap.add_argument("--elevation", type=float, default=15)
@@ -312,7 +313,10 @@ def main():
             far = perturb(base, rng)
             bid = f"{fam}{b:02d}"
             todo.append({"name": f"{bid}_L000", "family": fam, "base": bid, "level": 0.0, "params": base})
-            for lv in (args.levels if b < args.first + args.variant_bases else []):
+            levels = args.levels if b < args.first + args.variant_bases else []
+            if args.level_cycle and levels:
+                levels = [levels[(b - args.first) % len(levels)]]
+            for lv in levels:
                 todo.append({"name": f"{bid}_L{round(100 * lv):03d}", "family": fam, "base": bid, "level": lv, "params": blend(base, far, lv)})
 
     manifest = {"seed": args.seed, "views": args.views, "elevation": args.elevation, "size": args.size, "objects": []}

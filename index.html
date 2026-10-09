@@ -131,6 +131,7 @@
         <button type="button" data-task="calibration"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><b>Gaze calibration</b><span id="d-calibration"></span></button>
         <button type="button" data-task="paired"><svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="8" height="10" rx="2"/><rect x="13.5" y="7" width="8" height="10" rx="2"/></svg><b>Novelty preference</b><span id="d-paired"></span></button>
         <button type="button" data-task="object"><svg viewBox="0 0 24 24"><path d="M3 8l4-3 4 3v6l-4 3-4-3z"/><path d="M13 12a4 4 0 1 0 8 0 4 4 0 0 0-8 0z"/></svg><b>Object novelty</b><span id="d-object"></span></button>
+        <button type="button" data-task="graded"><svg viewBox="0 0 24 24"><path d="M3 18h3v-3H3zM8.5 18h3v-6h-3zM14 18h3v-9h-3zM19.5 18h1.5V6h-1.5z"/></svg><b>Graded object novelty</b><span id="d-graded">Loading…</span></button>
         <button type="button" data-task="oddone"><svg viewBox="0 0 24 24"><circle cx="4" cy="12" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><rect x="12.8" y="9.8" width="4.4" height="4.4" rx="1"/><circle cx="20.5" cy="12" r="2.2"/></svg><b>Odd one out</b><span id="d-oddone"></span></button>
       </div>
       <p class="note" id="teststatus" role="status"></p>
@@ -185,6 +186,7 @@
     <label>Form <select id="t-form"><option value="A">A</option><option value="B">B</option></select></label>
   </div>
   <p class="note" id="timinginfo"></p>
+  <p class="note">The graded test runs all 40 of its trials unless you change Trials here; it then uses whole blocks of 10 (10, 20 or 30).</p>
   <p class="note">Forms A and B use the same picture pairs in the same order and differ only in which object of each pair is the familiar one. Give half of a group each form.</p>
   <div class="dlgfoot"><button type="button" id="timingreset">Defaults</button><button type="button" class="primary" data-close>Done</button></div>
 </dialog>

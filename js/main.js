@@ -1,6 +1,6 @@
 import { Tracker, IRIS_MM } from './tracker.js';
 import { makeDemoSet, loadFiles, loadSet } from './stimuli.js';
-import { MODES, Stage, setPxPerDeg, runCalibration, runPaired, runObjectNovelty, runOddOne } from './tasks.js';
+import { MODES, Stage, setPxPerDeg, runCalibration, runPaired, runObjectNovelty, runGradedNovelty, runOddOne } from './tasks.js';
 import { linePlot, barPlot, COLORS } from './plot.js';
 
 const $ = (id) => document.getElementById(id);
@@ -29,6 +29,7 @@ const x = {
   get instructed() { return $('instructed').checked; },
   pairedOverride: null,
   set: null,
+  set2: null,
   get form() { return $('t-form').value; },
   mark(type) { session.events.push({ t: performance.now(), mode, task: rec.task, trial: rec.trial, type, cond: rec.cond }); },
 };
@@ -339,6 +340,7 @@ const TASKS = {
   calibration: { fn: runCalibration },
   paired: { fn: runPaired, gaze: true },
   object: { fn: runObjectNovelty, gaze: true },
+  graded: { fn: runGradedNovelty, gaze: true },
   oddone: { fn: runOddOne, gaze: true },
 };
 
@@ -452,6 +454,12 @@ setMode('adult');
 showThumbs();
 x.setReady = loadSet('stimuli/set1').then((set) => { x.set = set; $('setinfo').textContent = `Built-in picture set "${set.spec.name}" is loaded (${set.spec.pairs.length} object pairs on low-contrast noise).`; })
   .catch(() => { $('setinfo').textContent = 'No built-in picture set found; the novelty test will use placeholder shapes.'; });
+const set1Ready = x.setReady;
+x.setReady = Promise.all([set1Ready, loadSet('stimuli/set2').then((set) => {
+  x.set2 = set;
+  const n = set.spec.forms.A.graded_novelty.length, c = MODES[mode].paired;
+  $('d-graded').textContent = `${n} trials: the second object differs from the first by 5–40%, or is a different object. About ${Math.round(n * (1000 + c.fam + c.gap + c.test) / 60000)} min.`;
+}).catch(() => { $('d-graded').textContent = 'Picture set not found.'; })]);
 go('welcome');
 if (SIM) status('Simulation mode (?sim): no camera is used.');
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', fillCameras);

@@ -20,6 +20,9 @@ Camera: pick it in the Camera menu.
 - **Gaze calibration** — a target at five positions.
 - **Novelty preference** — the same picture on both sides, a blank, then that picture beside a new one.
 - **Object novelty** — two views of one object, a blank, then a third view of it beside a different object.
+- **Graded object novelty** — as object novelty, but the second object is a variant of the first that differs
+  by 5–40% (or a different object, as each person's ceiling). In half the trials image similarity is set
+  against object identity: the new object appears at a studied viewpoint, the familiar one at a new viewpoint.
 - **Odd one out** — three matching shapes and one different, graded dissimilarity, scored by screen half.
 
 An ADULT / INFANT toggle switches pacing, attention getters and trial counts.
@@ -29,6 +32,7 @@ An ADULT / INFANT toggle switches pacing, attention getters and trial counts.
 paired within family, on full-screen low-contrast 1/f noise, equalised within pair on gray-level histogram
 and spatial-frequency amplitude (after the SHINE toolbox, Willenbockel et al. 2010; our own implementation).
 Forms A and B present the same pairs in the same fixed order and differ only in which object is familiar.
+`stimuli/set2` holds the graded pairs (40 trials in four balanced blocks), built by `build_graded.py`.
 The pipeline is in `tools/`:
 1. `make_objects.py` — Blender (4.5) generator and renderer; objects are small parameter dictionaries, and
    each base object has variants along a line in parameter space for graded similarity;

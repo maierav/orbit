@@ -219,11 +219,11 @@ export async function runCalibration(x) {
 async function runNovelty(x, test) {
   const { stage, cfg, rec, session, stim } = x;
   const c = { ...cfg.paired, ...(x.pairedOverride || {}) };
-  const object = test === 'object_novelty';
-  rec.task = object ? 'object' : 'paired';
-  const title = object ? 'Object novelty' : 'Novelty preference';
+  const object = test !== 'image_novelty', graded = test === 'graded_novelty';
+  rec.task = { image_novelty: 'paired', object_novelty: 'object', graded_novelty: 'graded' }[test];
+  const title = { image_novelty: 'Novelty preference', object_novelty: 'Object novelty', graded_novelty: 'Graded object novelty' }[test];
   await x.setReady;  // the built-in pictures may still be downloading when a test is started quickly
-  const set = stim.custom ? null : x.set;
+  const set = graded ? x.set2 : (stim.custom ? null : x.set);
   if (object && !set) return { kind: rec.task, title, lines: ['This test needs the built-in picture set, which is not loaded.'] };
 
   await intro(x, cfg.attention
@@ -233,7 +233,13 @@ async function runNovelty(x, test) {
   // Trial list: { studyL, studyR, fam, nov, novelSide } with canvases.
   let plan;
   if (set) {
-    const list = set.spec.forms[x.form][test].slice(0, c.trials);
+    let list = set.spec.forms[x.form][test];
+    if (graded) {
+      // Graded trials come in balanced blocks; a shorter run uses whole blocks from the start.
+      const blk = set.spec.block_size, changed = x.pairedOverride && x.pairedOverride.trials !== cfg.paired.trials;
+      const want = changed ? x.pairedOverride.trials : list.length;
+      list = list.slice(0, Math.max(blk, Math.floor(Math.min(want, list.length) / blk) * blk));
+    } else list = list.slice(0, c.trials);
     stage.setDraw((ctx, w, h) => drawText(ctx, w, h, ['Loading pictures…']));
     const pics = await set.load(list.flatMap((t) => [...t.study, t.test_familiar, t.test_novel]));
     plan = list.map((t) => ({ studyL: pics[t.study[0]], studyR: pics[t.study[1]], fam: pics[t.test_familiar], nov: pics[t.test_novel], novelSide: t.novel_side, info: t }));
@@ -288,7 +294,7 @@ async function runNovelty(x, test) {
       windows.push({ t0, t1, off, novelSide });
       trials.push({
         trial: i + 1, pair: p.info.pair || '', family: p.info.family || '', familiar: p.info.familiar || '', novel: p.info.novel || '',
-        novel_side: novelSide, midline_offset: off,
+        level: p.info.level ?? '', condition: p.info.condition || '', novel_side: novelSide, midline_offset: off,
         auto_novel_ms: novelSide === 'L' ? lt.autoL : lt.autoR, auto_familiar_ms: novelSide === 'L' ? lt.autoR : lt.autoL,
         tracked_frac: lt.tracked / lt.total, novelty_pref: share(lt.autoL, lt.autoR), manual_novelty_pref: share(lt.manL, lt.manR),
       });
@@ -313,7 +319,7 @@ async function runNovelty(x, test) {
     const s = stats(prefs);
     Object.assign(data, { novelty_pref_mean: s.m, novelty_pref_sd: s.sd, d_across_trials: s.d, t_across_trials: s.t, n_usable: s.n });
     lines.push(`Looking at the ${what}: ${(100 * s.m).toFixed(0)}% of looking time (50% = no preference), from ${s.n}/${nTrials} usable trials.`);
-    lines.push(`Across trials: SD ${(100 * s.sd).toFixed(0)} points, effect size d = ${f2(s.d)}, t(${s.n - 1}) = ${f2(s.t)}.${object ? '' : ' Lab studies report 59–71%.'}`);
+    lines.push(`Across trials: SD ${(100 * s.sd).toFixed(0)} points, effect size d = ${f2(s.d)}, t(${s.n - 1}) = ${f2(s.t)}.${object ? '' : ' Lab studies report 59–71%.'}${graded ? ' (all levels and conditions pooled)' : ''}`);
     // How the estimate builds up, to judge how few trials and how short a test would do.
     const steps = [4, 8, 12, 16, 24, 32, 40].filter((k) => k < prefs.length);
     if (steps.length) lines.push(`By number of trials: ${steps.map((k) => { const q = stats(prefs.slice(0, k)); return `${k}: ${(100 * q.m).toFixed(0)}% (t ${f2(q.t)})`; }).join(' · ')}.`);
@@ -335,6 +341,30 @@ async function runNovelty(x, test) {
     pm.push(v.length ? mean(v) : NaN);
     pse.push(v.length > 1 ? Math.sqrt(mean(v.map((q) => (q - mean(v)) ** 2)) / (v.length - 1)) : 0);
   }
+  if (graded) {
+    // Each person's curve: preference for the new object as the two objects become more alike.
+    const levels = [...set.spec.levels, 'easy'], name = (lv) => (lv === 'easy' ? 'different object' : `${Math.round(100 * lv)}%`);
+    const series = [];
+    data.by_level = [];
+    for (const [k, cond] of ['standard', 'opposed'].entries()) {
+      const ys = [], se = [];
+      for (const lv of levels) {
+        const v = usable.filter((t) => t.condition === cond && t.level === lv).map((t) => t.novelty_pref);
+        const m = v.length ? mean(v) : NaN;
+        ys.push(m);
+        se.push(v.length > 1 ? Math.sqrt(mean(v.map((q) => (q - m) ** 2)) / (v.length - 1)) : 0);
+        data.by_level.push({ condition: cond, level: lv, n: v.length, novelty_pref: m });
+      }
+      lines.push(`${cond === 'standard' ? 'Standard' : 'Opposed'}: ${levels.map((lv, i) => `${name(lv)} ${Number.isFinite(ys[i]) ? `${(100 * ys[i]).toFixed(0)}%` : 'n/a'}`).join(' · ')}.`);
+      series.push({ label: cond === 'standard' ? 'Standard (both from the front)' : 'Opposed (new object at a studied view, familiar object at a new view)', color: COLORS[k], x: levels.map((_, i) => i + 1), y: ys, band: se });
+    }
+    series.push({ label: 'No preference', color: '#898781', x: [1, levels.length], y: [0.5, 0.5] });
+    lines.push('In the opposed condition image similarity favours the familiar object, so a preference above 50% there reflects the object and not the image.');
+    return {
+      kind: rec.task, title, lines, trials, data,
+      plot: { type: 'line', xlabel: `Difference between the two objects (${levels.map((lv, i) => `${i + 1} = ${name(lv)}`).join(', ')})`, ylabel: 'Share of looks at new object', ylim: [0, 1], series },
+    };
+  }
   return {
     kind: rec.task, title, lines, trials, data,
     plot: {
@@ -348,6 +378,7 @@ async function runNovelty(x, test) {
 }
 export const runPaired = (x) => runNovelty(x, 'image_novelty');
 export const runObjectNovelty = (x) => runNovelty(x, 'object_novelty');
+export const runGradedNovelty = (x) => runNovelty(x, 'graded_novelty');
 
 // Odd-one-out: three copies of one shape and one different shape in a row. Because webcam gaze is only
 // reliable for left vs. right, looks are scored by screen half (chance = 0.5), not by item.
