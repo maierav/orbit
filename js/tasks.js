@@ -1,6 +1,5 @@
 import { BG, makeGradedPairs, makeNoveltyPairs } from './stimuli.js';
-import { IRIS_MM } from './tracker.js';
-import { epoch, average, windowMean, lookTimes, centreOffset, firstLook, mean } from './analysis.js';
+import { lookTimes, centreOffset, firstLook, mean } from './analysis.js';
 import { COLORS } from './plot.js';
 
 // Durations in ms; `size` is the stimulus edge as a fraction of min(half screen width, screen height).
@@ -8,13 +7,11 @@ export const MODES = {
   adult: {
     attention: false, selfPaced: false, calibDwell: 1600,
     paired: { trials: 24, fam: 5000, test: 5000, gap: 2000, size: 0.9 },
-    oddball: { trials: 60, stim: 600, isi: 1600, size: 0.6 },
     oddone: { trials: 16, dur: 2500, gap: 1000 },
   },
   infant: {
     attention: true, selfPaced: true, calibDwell: 2200,
     paired: { trials: 8, fam: 10000, test: 8000, gap: 1500, size: 1 },
-    oddball: { trials: 30, stim: 1000, isi: 2000, size: 0.85 },
     oddone: { trials: 8, dur: 5000, gap: 1500 },
   },
 };
@@ -170,7 +167,7 @@ function drawText(ctx, w, h, lines) {
 
 async function intro(x, lines) {
   x.rec.phase = 'intro';
-  x.setBg(BG);
+  x.stage.bg = BG;
   x.stage.setDraw((ctx, w, h) => drawText(ctx, w, h, [...lines, 'Press SPACE or tap to start  ·  ESC stops']));
   await x.stage.waitKey();
 }
@@ -211,47 +208,6 @@ export async function runCalibration(x) {
   };
 }
 
-export async function runLightReflex(x) {
-  const { stage, rec, session } = x;
-  rec.task = 'plr';
-  await intro(x, ['Light-reflex check', 'Keep the room lights on and look at the central target.', 'The screen will flash bright three times (25 s).']);
-  const DARK = 25, BRIGHT = 255, ON = 2000, OFF = 5000, onsets = [];
-  stage.setDraw((ctx, w, h) => drawFix(ctx, w / 2, h / 2, stage.bg));
-  Object.assign(rec, { trial: -1, phase: 'dark', cond: '' });
-  x.setBg(DARK);
-  await stage.wait(4000);
-  for (let i = 0; i < 3; i++) {
-    Object.assign(rec, { trial: i, phase: 'bright' });
-    x.setBg(BRIGHT); onsets.push(performance.now()); x.mark('flash_on');
-    await stage.wait(ON);
-    rec.phase = 'dark';
-    x.setBg(DARK); x.mark('flash_off');
-    await stage.wait(OFF);
-  }
-  const eps = onsets.map((t0) => epoch(session.samples, t0, { tmin: -1, tmax: 6 })).filter(Boolean);
-  const avg = average(eps);
-  if (!avg) return { kind: 'plr', title: 'Light-reflex check', lines: ['Too few valid pupil samples. Move closer, add light on the face, and try again.'] };
-  let k = 0;
-  avg.t.forEach((t, i) => { if (t > 0.2 && t < 3.5 && avg.mean[i] < avg.mean[k]) k = i; });
-  const base = mean(eps.map((e) => e.base)), amp = -avg.mean[k];
-  const noise = Math.sqrt(mean(avg.t.map((t, i) => (t < 0 ? avg.mean[i] ** 2 : NaN)).filter(Number.isFinite)));
-  return {
-    kind: 'plr', title: 'Light-reflex check',
-    lines: [
-      `Baseline pupil ≈ ${base.toFixed(2)} mm (assuming an ${IRIS_MM} mm iris); ${eps.length}/3 flashes usable.`,
-      `Peak constriction ${amp.toFixed(2)} mm (${(100 * amp / base).toFixed(0)}%) at ${avg.t[k].toFixed(2)} s after flash onset.`,
-      `Pre-flash noise of the averaged trace: ${noise.toFixed(3)} mm RMS.`,
-      eps.length === 3 && amp > 4 * noise ? 'The reflex is clearly resolved on this device.'
-        : 'Not reliable: flashes were lost or the response is not clearly above the noise, so do not trust the numbers above.',
-    ],
-    plot: {
-      type: 'line', xlabel: 'Time from flash onset (s)', ylabel: 'Pupil change (est. mm)', zero: true, shades: [[0, ON / 1000]],
-      series: [{ label: 'Mean of flashes', color: COLORS[0], x: avg.t, y: avg.mean, band: avg.sem }],
-    },
-    data: { baseline_mm: base, constriction_mm: amp, latency_s: avg.t[k], noise_rms_mm: noise, n: eps.length },
-  };
-}
-
 // Novelty preference (visual paired comparison). Two versions share this code:
 //   image novelty   the same picture on both sides, a short blank, then that picture beside a new one
 //                   (timing defaults follow Manns, Stark & Squire, 2000);
@@ -266,6 +222,7 @@ async function runNovelty(x, test) {
   const object = test === 'object_novelty';
   rec.task = object ? 'object' : 'paired';
   const title = object ? 'Object novelty' : 'Novelty preference';
+  await x.setReady;  // the built-in pictures may still be downloading when a test is started quickly
   const set = stim.custom ? null : x.set;
   if (object && !set) return { kind: rec.task, title, lines: ['This test needs the built-in picture set, which is not loaded.'] };
 
@@ -462,63 +419,5 @@ export async function runOddOne(x) {
       ylabel: 'Dwell share on odd side', xlabel: 'Shape dissimilarity (added-component amplitude)', ylim: [0, 1], ref: 0.5, color: COLORS[0],
     },
     data: { instructed, by_level: byLevel },
-  };
-}
-
-// 80% standards; deviants never within the first 3 trials and always >= 2 standards apart.
-function oddballSequence(n) {
-  let nDev = 2 * Math.round(0.1 * n);
-  while (nDev > 0 && n - 1 - (3 + 3 * (nDev - 1)) < 0) nDev -= 2;
-  const seq = Array(n).fill('standard');
-  const extra = Array(nDev).fill(0), slack = n - 1 - (3 + 3 * (nDev - 1));
-  for (let i = 0; i < slack; i++) { const k = Math.floor(Math.random() * (nDev + 1)); if (k < nDev) extra[k]++; }
-  const kinds = shuffle(Array.from({ length: nDev }, (_, i) => (i % 2 ? 'within' : 'across')));
-  let pos = 3;
-  for (let k = 0; k < nDev; k++) { pos += extra[k] + (k ? 3 : 0); seq[pos] = kinds[k]; }
-  return seq;
-}
-
-export async function runOddball(x) {
-  const { stage, cfg, rec, session, stim } = x;
-  const c = cfg.oddball, { A, B } = stim;
-  rec.task = 'oddball';
-  await intro(x, cfg.attention
-    ? ['Pupil oddball', 'Pictures appear at the centre; no response is needed.', `About ${Math.round(c.trials * (c.stim + c.isi) / 1000)} s.`]
-    : ['Pupil oddball', 'Keep looking at the central target. No response is needed.', `About ${Math.round(c.trials * (c.stim + c.isi + 100) / 1000)} s. Try to blink between pictures.`]);
-  const seq = oddballSequence(c.trials), onsets = [];
-  const simAmp = { standard: 0.002, within: 0.008, across: 0.02 };
-  let kW = 0, kB = 0;
-  const fix = (ctx, w, h) => { if (!cfg.attention) drawFix(ctx, w / 2, h / 2); };
-  stage.setDraw(fix);
-  Object.assign(rec, { trial: -1, phase: 'isi', cond: '' });
-  await stage.wait(1500);
-  for (let i = 0; i < seq.length; i++) {
-    const cond = seq[i];
-    const img = cond === 'standard' ? A[0] : cond === 'within' ? A[1 + (kW++ % (A.length - 1))] : B[kB++ % B.length];
-    Object.assign(rec, { trial: i, phase: 'stim', cond });
-    const jit = 0.8 + 0.2 * Math.random();
-    stage.setDraw((ctx, w, h) => { const s = stimSize(w, h, c.size) * jit; ctx.drawImage(img, w / 2 - s / 2, h / 2 - s / 2, s, s); fix(ctx, w, h); });
-    onsets.push({ t: performance.now(), cond }); x.mark('stim_on');
-    x.tracker.simEvent(simAmp[cond]);
-    await stage.wait(c.stim);
-    rec.phase = 'isi';
-    stage.setDraw(fix); x.mark('stim_off');
-    await stage.wait(c.isi + 200 * Math.random());
-  }
-  const conds = [['standard', 'Standard (repeated A)'], ['within', 'Deviant, same category (new A)'], ['across', 'Deviant, other category (B)']];
-  const series = [], lines = [], data = {};
-  conds.forEach(([key, label], k) => {
-    const all = onsets.filter((o) => o.cond === key);
-    const avg = average(all.map((o) => epoch(session.samples, o.t, { tmin: -0.2, tmax: 2 })).filter(Boolean));
-    if (!avg) { lines.push(`${label}: no usable epochs (0/${all.length}).`); return; }
-    const m = windowMean(avg.t, avg.mean, 0.5, 1.5);
-    data[key] = { n: avg.n, mean_mm_0p5_1p5s: m };
-    lines.push(`${label}: ${m >= 0 ? '+' : ''}${m.toFixed(3)} mm mean change 0.5–1.5 s (${avg.n}/${all.length} epochs).`);
-    series.push({ label, color: COLORS[k], x: avg.t, y: avg.mean, band: avg.sem });
-  });
-  if (data.within && data.across) lines.push(`Category effect (other − same category deviant): ${(data.across.mean_mm_0p5_1p5s - data.within.mean_mm_0p5_1p5s).toFixed(3)} mm.`);
-  return {
-    kind: 'oddball', title: 'Pupil oddball', lines, data,
-    plot: series.length ? { type: 'line', xlabel: 'Time from picture onset (s)', ylabel: 'Pupil change (est. mm)', zero: true, shades: [[0, c.stim / 1000]], series } : null,
   };
 }

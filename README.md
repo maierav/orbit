@@ -8,7 +8,7 @@ never stored or transmitted; only numeric gaze and pupil time series are kept, a
 
 ## Using it
 Four pages: Welcome, Set up, Tests, Results. On Set up, two eye icons turn green when each eye is being
-measured; the camera image, eye close-ups, eye position and pupil traces are optional views. The camera can
+tracked; the camera image, eye close-ups and eye position traces are optional views. The camera can
 be stopped at any time. "Units and distance" calibrates the screen scale (bank card) and viewing distance so
 gaze is reported in degrees of visual angle.
 
@@ -18,11 +18,9 @@ Camera: pick it in the Camera menu.
 
 ## Tests
 - **Gaze calibration** — a target at five positions.
-- **Light-reflex check** — bright flashes; gives the pupil noise floor of the device.
 - **Novelty preference** — the same picture on both sides, a blank, then that picture beside a new one.
 - **Object novelty** — two views of one object, a blank, then a third view of it beside a different object.
 - **Odd one out** — three matching shapes and one different, graded dissimilarity, scored by screen half.
-- **Pupil oddball** — a repeated picture with rare changes.
 
 An ADULT / INFANT toggle switches pacing, attention getters and trial counts.
 
@@ -38,8 +36,9 @@ The pipeline is in `tools/`:
 3. `image_stats.py`, `shine_match.py` — image statistics, salience balance and the matching operations.
 
 ## Status
-Research prototype, not a validated instrument. Left/right gaze works on a 720p laptop webcam; pupil size
-needs more pixels on the iris than such a webcam gives. The built-in shapes are placeholders.
+Research prototype, not a validated instrument. Left/right gaze works on an ordinary laptop webcam.
+Pupil-size measurement was tried and retired: a laptop webcam does not put enough pixels on the iris, and
+the screen's reflection on the cornea corrupts the estimate. That code remains in the repository history.
 
 ## Run locally
 `python3 serve.py`, then open http://127.0.0.1:8765. Camera access needs HTTPS or localhost.

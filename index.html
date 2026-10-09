@@ -44,9 +44,9 @@
         <h1>Welcome to ORBIT</h1>
         <p class="lead">A short, camera-based test of how the eyes respond to pictures.<br>There is nothing to press and no right or wrong answer: you simply look at the screen.</p>
         <div class="feat">
-          <div><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><b>Just look</b><span>Your camera follows where you look and how your pupils respond.</span></div>
+          <div><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><b>Just look</b><span>Your camera follows where you look. Nothing else is needed.</span></div>
           <div><svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg><b>Private by design</b><span>Video is analysed on this device and is never saved or sent anywhere.</span></div>
-          <div><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg><b>A few minutes</b><span>Each test takes between 15 seconds and two and a half minutes.</span></div>
+          <div><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg><b>A few minutes</b><span>Each test takes between 15 seconds and five minutes.</span></div>
         </div>
         <div class="who">
           <span>Who is being tested?</span>
@@ -74,7 +74,6 @@
           <div class="chips">
             <span class="chip" id="chip-dist">distance –</span>
             <span class="chip" id="chip-iris">iris –</span>
-            <span class="chip" id="chip-pupil">pupil –</span>
             <span class="chip" id="chip-fps">– fps</span>
             <span class="chip" id="chip-res">–</span>
           </div>
@@ -95,26 +94,20 @@
               <button type="button" role="radio" data-view="camera" aria-checked="false">Camera</button>
               <button type="button" role="radio" data-view="eyes" aria-checked="false">Eyes</button>
               <button type="button" role="radio" data-view="position" aria-checked="false">Position</button>
-              <button type="button" role="radio" data-view="pupil" aria-checked="false">Pupil</button>
             </div>
           </div>
           <div class="viewbody">
-            <div class="view" data-view="off"><p class="note">The coloured eyes on the left are all you need. Choose a view to see the camera image, the eye close-ups, or the eye position and pupil size over time.</p></div>
+            <div class="view" data-view="off"><p class="note">The coloured eyes on the left are all you need. Choose a view to see the camera image, the eye close-ups, or the eye position over time.</p></div>
             <div class="view" data-view="camera" hidden>
               <canvas id="camview"></canvas>
             </div>
             <div class="view" data-view="eyes" hidden>
               <canvas id="eyes" width="560" height="280"></canvas>
-              <button type="button" id="snap" title="Saves a small unprocessed image of the two eye regions to this device">Save eye snapshot</button>
             </div>
             <div class="view" data-view="position" hidden>
               <div class="legend"><span><i style="background:#2a78d6"></i>Left eye</span><span><i style="background:#eb6834"></i>Right eye</span><span id="posunit" class="note"></span></div>
               <canvas id="posx" class="plot"></canvas>
               <canvas id="posy" class="plot"></canvas>
-            </div>
-            <div class="view" data-view="pupil" hidden>
-              <div class="legend"><span><i style="background:#2a78d6"></i>Left eye</span><span><i style="background:#eb6834"></i>Right eye</span></div>
-              <canvas id="live" class="plot"></canvas>
             </div>
           </div>
         </div>
@@ -130,18 +123,15 @@
         </div>
         <div class="testopts">
           <label class="check"><input type="checkbox" id="instructed"> Odd one out: tell adults to look at the odd one</label>
-          <label class="check" title="The camera measures the pupil in red light. Showing the test screen without red removes the screen's own reflection from that measurement. Pictures look blue-green."><input type="checkbox" id="nored"> Glare-free display (no red)</label>
           <button type="button" id="timingbtn">Timing…</button>
           <button type="button" id="stimbtn">Pictures…</button>
         </div>
       </div>
       <div class="taskgrid">
         <button type="button" data-task="calibration"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg><b>Gaze calibration</b><span id="d-calibration"></span></button>
-        <button type="button" data-task="plr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><b>Light-reflex check</b><span id="d-plr"></span></button>
         <button type="button" data-task="paired"><svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="8" height="10" rx="2"/><rect x="13.5" y="7" width="8" height="10" rx="2"/></svg><b>Novelty preference</b><span id="d-paired"></span></button>
         <button type="button" data-task="object"><svg viewBox="0 0 24 24"><path d="M3 8l4-3 4 3v6l-4 3-4-3z"/><path d="M13 12a4 4 0 1 0 8 0 4 4 0 0 0-8 0z"/></svg><b>Object novelty</b><span id="d-object"></span></button>
         <button type="button" data-task="oddone"><svg viewBox="0 0 24 24"><circle cx="4" cy="12" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><rect x="12.8" y="9.8" width="4.4" height="4.4" rx="1"/><circle cx="20.5" cy="12" r="2.2"/></svg><b>Odd one out</b><span id="d-oddone"></span></button>
-        <button type="button" data-task="oddball"><svg viewBox="0 0 24 24"><path d="M2 15h4l2-8 3 12 3-9 2 5h6"/></svg><b>Pupil oddball</b><span id="d-oddball"></span></button>
       </div>
       <p class="note" id="teststatus" role="status"></p>
     </section>
@@ -223,7 +213,6 @@
   <button type="button" id="abort" aria-label="Stop test">×</button>
 </div>
 <div id="tip" hidden></div>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="f-nored" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter></svg>
 
 <script type="module" src="js/main.js"></script>
 </body>
