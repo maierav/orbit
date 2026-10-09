@@ -138,3 +138,32 @@ export function imageStats(cv) {
   for (let i = 0; i < n; i++) v += (0.2126 * d[4 * i] + 0.7152 * d[4 * i + 1] + 0.0722 * d[4 * i + 2] - m) ** 2;
   return { mean: m, sd: Math.sqrt(v / n) };
 }
+
+// Built-in stimulus set made by tools/build_set.py: finished greyscale pictures on noise, shown untouched
+// apart from a soft circular edge that lets each picture merge into the screen's own noise.
+export async function loadSet(url) {
+  const spec = await (await fetch(`${url}/set.json`)).json();
+  const img = async (file) => { const im = new Image(); im.src = `${url}/${file}`; await im.decode(); return im; };
+  const cache = {}, n = spec.patch_px;
+  const windowed = async (file) => {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = n;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(await img(file), 0, 0, n, n);
+    const g = ctx.createRadialGradient(n / 2, n / 2, spec.window.flat * n / 2, n / 2, n / 2, spec.window.edge * n / 2);
+    for (let i = 0; i <= 8; i++) g.addColorStop(i / 8, `rgba(0,0,0,${0.5 + 0.5 * Math.cos(Math.PI * i / 8)})`);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, n, n);
+    return cv;
+  };
+  const tiles = await Promise.all(spec.noise.tiles.map(img));
+  return {
+    spec,
+    tile: () => tiles[Math.floor(Math.random() * tiles.length)],
+    async load(files) {
+      await Promise.all([...new Set(files)].filter((f) => !cache[f]).map(async (f) => { cache[f] = await windowed(f); }));
+      return cache;
+    },
+  };
+}

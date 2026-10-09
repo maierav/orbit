@@ -16,14 +16,26 @@ Works in current Chrome, Safari, Firefox and Edge, including Safari on iPhone an
 gives a full-screen app). On a Mac, an iPhone can serve as a higher-resolution eye camera through Continuity
 Camera: pick it in the Camera menu.
 
-## Tasks
-- **Gaze calibration** — centre / left / right targets.
+## Tests
+- **Gaze calibration** — a target at five positions.
 - **Light-reflex check** — bright flashes; gives the pupil noise floor of the device.
-- **Preferential looking** — familiarise with one object, then a new same-category vs. other-category pair.
+- **Novelty preference** — the same picture on both sides, a blank, then that picture beside a new one.
+- **Object novelty** — two views of one object, a blank, then a third view of it beside a different object.
 - **Odd one out** — three matching shapes and one different, graded dissimilarity, scored by screen half.
-- **Pupil oddball** — repeated object with rare same- or other-category deviants.
+- **Pupil oddball** — a repeated picture with rare changes.
 
 An ADULT / INFANT toggle switches pacing, attention getters and trial counts.
+
+## Stimuli
+`stimuli/set1` is a generated set of novel objects (no third-party images): 96 objects from three families,
+paired within family, on full-screen low-contrast 1/f noise, equalised within pair on gray-level histogram
+and spatial-frequency amplitude (after the SHINE toolbox, Willenbockel et al. 2010; our own implementation).
+Forms A and B present the same pairs in the same fixed order and differ only in which object is familiar.
+The pipeline is in `tools/`:
+1. `make_objects.py` — Blender (4.5) generator and renderer; objects are small parameter dictionaries, and
+   each base object has variants along a line in parameter space for graded similarity;
+2. `build_set.py` — sizing by projected area, pairing, noise backgrounds, matching, fixed trial forms;
+3. `image_stats.py`, `shine_match.py` — image statistics, salience balance and the matching operations.
 
 ## Status
 Research prototype, not a validated instrument. Left/right gaze works on a 720p laptop webcam; pupil size

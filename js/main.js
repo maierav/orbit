@@ -1,6 +1,6 @@
 import { Tracker, IRIS_MM } from './tracker.js';
-import { makeDemoSet, loadFiles } from './stimuli.js';
-import { MODES, Stage, setPxPerDeg, runCalibration, runLightReflex, runPaired, runOddOne, runOddball } from './tasks.js';
+import { makeDemoSet, loadFiles, loadSet } from './stimuli.js';
+import { MODES, Stage, setPxPerDeg, runCalibration, runLightReflex, runPaired, runObjectNovelty, runOddOne, runOddball } from './tasks.js';
 import { linePlot, barPlot, COLORS } from './plot.js';
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +28,8 @@ const x = {
   get cfg() { return MODES[mode]; },
   get instructed() { return $('instructed').checked; },
   pairedOverride: null,
+  set: null,
+  get form() { return $('t-form').value; },
   mark(type) { session.events.push({ t: performance.now(), mode, task: rec.task, trial: rec.trial, type, cond: rec.cond }); },
   setBg(v) { stage.bg = v; tracker.simLuma = v / 255; },
 };
@@ -69,6 +71,7 @@ function setMode(m) {
   $('d-calibration').textContent = `Follow a target to five positions. About ${Math.round(8 * c.calibDwell / 1000)} s.`;
   $('d-plr').textContent = 'Three bright flashes. Shows how well this device measures pupil size. 25 s.';
   const pc = { ...c.paired, ...(x.pairedOverride || {}) };
+  $('d-object').textContent = `${pc.trials} trials: two views of an object, then a third view beside a different object.`;
   $('d-paired').textContent = `${pc.trials} trials: one picture twice, then beside a new one. About ${Math.round(pc.trials * (1000 + pc.fam + pc.gap + pc.test) / 60000)} min.`;
   $('d-oddone').textContent = `${c.oddone.trials} trials: four shapes, one differs by a graded amount (${s(c.oddone.dur)} each).`;
   $('d-oddball').textContent = `${c.oddball.trials} pictures with rare changes. About ${Math.round(c.oddball.trials * (c.oddball.stim + c.oddball.isi) / 1000)} s.`;
@@ -364,6 +367,7 @@ const TASKS = {
   calibration: { fn: runCalibration },
   plr: { fn: runLightReflex },
   paired: { fn: runPaired, gaze: true },
+  object: { fn: runObjectNovelty, gaze: true },
   oddone: { fn: runOddOne, gaze: true },
   oddball: { fn: runOddball },
 };
@@ -479,6 +483,8 @@ $('dl-summary').addEventListener('click', () => {
 
 setMode('adult');
 showThumbs();
+loadSet('stimuli/set1').then((set) => { x.set = set; $('setinfo').textContent = `Built-in picture set "${set.spec.name}" is loaded (${set.spec.pairs.length} object pairs on low-contrast noise).`; })
+  .catch(() => { $('setinfo').textContent = 'No built-in picture set found; the novelty test will use placeholder shapes.'; });
 go('welcome');
 if (SIM) status('Simulation mode (?sim): no camera is used.');
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', fillCameras);
